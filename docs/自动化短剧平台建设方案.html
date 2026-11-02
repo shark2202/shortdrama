@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自动化短剧 / 短视频平台建设方案 · RTX 2080 Ti 22G 本机</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#fff; --ink:#1b1f24; --muted:#5b6470; --line:#e3e6ea;
+    --accent:#2f6fed; --accent-soft:#eaf1ff; --warn:#b26a00; --warn-bg:#fff6e5;
+    --ok:#0f7b45; --ok-bg:#e9f7ef; --bad:#c0392b; --bad-bg:#fdecea; --code-bg:#f2f4f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","Noto Sans CJK SC","Microsoft YaHei",sans-serif;}
+  .wrap{display:flex;max-width:1360px;margin:0 auto;gap:28px;padding:24px 20px 80px}
+  nav{position:sticky;top:16px;align-self:flex-start;width:250px;flex:0 0 250px;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    max-height:calc(100vh - 32px);overflow:auto}
+  nav b{display:block;font-size:13px;color:var(--muted);letter-spacing:.04em;margin-bottom:8px}
+  nav a{display:block;color:var(--ink);text-decoration:none;padding:4px 6px;border-radius:6px;font-size:13.5px}
+  nav a:hover{background:var(--accent-soft);color:var(--accent)}
+  nav a.sub{padding-left:16px;color:var(--muted);font-size:12.5px}
+  main{flex:1;min-width:0}
+  header.hero{background:linear-gradient(135deg,#22314d,#3a5580);color:#fff;border-radius:14px;padding:26px 28px;margin-bottom:22px}
+  header.hero h1{margin:0 0 8px;font-size:26px}
+  header.hero p{margin:4px 0 0;opacity:.9;font-size:14px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin-bottom:20px}
+  h2{margin:0 0 6px;font-size:20px;border-left:4px solid var(--accent);padding-left:10px}
+  h3{margin:22px 0 8px;font-size:16.5px;color:#243b64}
+  h4{margin:16px 0 6px;font-size:14.5px;color:var(--muted)}
+  .sub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px;background:#fff}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  tbody tr:nth-child(even){background:#fafbfc}
+  code,kbd{background:var(--code-bg);border-radius:5px;padding:1px 5px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.6px}
+  pre{background:#111823;color:#e6edf3;border-radius:10px;padding:13px 15px;overflow:auto;font-size:12.8px;line-height:1.6}
+  pre code{background:none;color:inherit;padding:0}
+  .box{border-radius:10px;padding:12px 15px;margin:14px 0;font-size:14px;border:1px solid}
+  .box p:first-child{margin-top:0}.box p:last-child{margin-bottom:0}
+  .tip{background:var(--ok-bg);border-color:#bfe4cf}
+  .warn{background:var(--warn-bg);border-color:#f0d49b}
+  .bad{background:var(--bad-bg);border-color:#f2c1bb}
+  .info{background:var(--accent-soft);border-color:#c3d8ff}
+  .box b{font-weight:700}
+  .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0 14px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.3px}
+  .n{background:#fff;border:1.5px solid #9db4dd;border-radius:8px;padding:5px 9px;color:#1f3c73;white-space:nowrap}
+  .n.io{border-color:#8fc9a8;color:#14603a;background:#f2fbf6}
+  .n.out{border-color:#e0b878;color:#7a4a06;background:#fffaf1}
+  .ar{color:#8a94a3}
+  .tag{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:20px;background:var(--accent-soft);color:var(--accent);margin-right:5px}
+  .tag.ok{background:var(--ok-bg);color:var(--ok)}
+  .tag.no{background:var(--bad-bg);color:var(--bad)}
+  .tag.mid{background:var(--warn-bg);color:var(--warn)}
+  .tag.gray{background:#eceff3;color:var(--muted)}
+  ul,ol{padding-left:22px}
+  li{margin:4px 0}
+  .k{color:var(--muted);font-size:13px}
+  hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+  footer{color:var(--muted);font-size:12.5px;text-align:center;padding:10px}
+  .kpi{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0 4px}
+  .kpi div{flex:1 1 150px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .kpi b{display:block;font-size:20px;color:var(--accent);line-height:1.3}
+  .kpi span{font-size:12.5px;color:var(--muted)}
+  .grid2{display:flex;flex-wrap:wrap;gap:14px}
+  .grid2>div{flex:1 1 320px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.6px}
+  @media (max-width:900px){nav{display:none}.wrap{padding:12px}}
+  @media print{nav{display:none}body{background:#fff}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <b>目录</b>
+  <a href="#tldr">0 · 一页速览</a>
+  <a href="#goal">1 · 目标与范围</a>
+  <a href="#now">2 · 现状盘点（本机资产）</a>
+  <a href="#limits">3 · 硬约束与红线</a>
+  <a href="#arch">4 · 总体架构</a>
+  <a href="#models">5 · 本地模型与算力选型</a>
+  <a href="#decisions">6 · 十个关键决策</a>
+  <a href="#repo">7 · 系统形态与目录结构</a>
+  <a href="#schema">8 · 数据契约</a>
+  <a href="#stages">9 · 流水线六阶段细则</a>
+  <a href="#sched">10 · 调度与资源排期</a>
+  <a href="#capacity">11 · 产能与成本模型</a>
+  <a href="#ms">12 · 里程碑与验收</a>
+  <a href="#risk">13 · 风险登记册</a>
+  <a href="#ops">14 · 运维与监控</a>
+  <a href="#appendix">15 · 附录（命令 / 路径 / 端口）</a>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>自动化短剧 / 短视频平台 · 建设方案</h1>
+  <p>目标机器：<b>X99 · 双路 Xeon E5-2680 v4（56 线程）· 32GB RAM · RTX 2080 Ti 22GB（sm_75）· 1TB NVMe</b></p>
+  <p>技术底座：<b>pi-agent（编排/Agent）</b> + <b>ComfyUI v0.33.1 + MiniMax-H3 W4A8（渲染）</b> + <b>本地 LLM（剧本）</b>，模型全部本地化</p>
+  <p style="opacity:.8;font-size:13px">本方案只做「一件事」：一句话题材 → 本地出成片。全部数字标注可信度：【实测】/【推算】。</p>
+</header>
+
+<!-- ================= 0 ================= -->
+<section id="tldr">
+<h2>0 · 一页速览</h2>
+<p class="sub">如果只读一节，读这节。</p>
+
+<div class="kpi">
+  <div><b>166–198 s</b><span>单镜 5.2 秒成片耗时【实测】</span></div>
+  <div><b>≈ 40 min</b><span>一集 60 秒短剧 GPU 占用【推算】</span></div>
+  <div><b>8.3 s</b><span>中文定妆图出图【实测】</span></div>
+  <div><b>r = 0.998</b><span>跨镜人物一致性【实测】</span></div>
+  <div><b>1 张</b><span>可并行渲染的 GPU（22GB 独占）</span></div>
+</div>
+
+<h3>0.1 方案一句话</h3>
+<div class="box info">
+<b>用 pi-agent 做"编剧 + 调度 + 质检"，用 ComfyUI + MiniMax-H3 做"画 + 拍"，用本地 27B LLM 做"写"，用 ffmpeg 做"剪"，中间用一份 JSON 契约串起来。</b>
+整条链路的<b>每一个零件本机都已经跑通过</b>（剧本除外），本方案要做的不是"从零搭平台"，而是<b>把已经跑通的六块零件按一条流水线接起来</b>，并补上缺失的那一块（剧本生成 + 编排调度）。
+</div>
+
+<h3>0.2 六个阶段（每段都有现成资产可复用）</h3>
+<div class="flow">
+<span class="n">题材</span><span class="ar">→</span>
+<span class="n">P1 剧本 <i>本地 LLM</i></span><span class="ar">→</span>
+<span class="n io">story.json</span><span class="ar">→</span>
+<span class="n">P2 定妆图 <i>Z-Image</i></span><span class="ar">→</span>
+<span class="n io">cast/*.png</span><span class="ar">→</span>
+<span class="n">P3 分镜 <i>LLM</i></span><span class="ar">→</span>
+<span class="n io">shots.json</span><span class="ar">→</span>
+<span class="n">P4 出镜 <i>H3 W4A8</i></span><span class="ar">→</span>
+<span class="n io">clips/*.mp4</span><span class="ar">→</span>
+<span class="n">P5 后期 <i>ffmpeg</i></span><span class="ar">→</span>
+<span class="n out">episode.mp4</span><span class="ar">→</span>
+<span class="n">P6 质检</span>
+</div>
+
+<h3>0.3 三句话风险</h3>
+<div class="box warn">
+<b>① 单卡显存是唯一硬瓶颈。</b>本地 LLM（13–17GB）和 H3（≈20GB）<b>不能同时驻留</b>，所以整条流水线必须<b>阶段串行</b>，不能像云上那样"边写剧本边渲染"。<br>
+<b>② 缓存加速档不可复现。</b>T8 / FirstBlockCache / TeaCache 命中会 fork 采样轨迹，同 seed 出不同画面。→ <b>草稿用缓存档，成片用 bypass 档</b>（<code>h3turing.tiers.reproducible_only()</code> 已经把这条纪律写进代码）。<br>
+<b>③ H3 的原生音轨与 latent 帧数绑定。</b>插帧能变流畅但<b>不会延长声音</b>；台词配音首版不本地化，靠字幕 + 原生环境音顶。
+</div>
+
+<h3>0.4 不做什么（明确划界）</h3>
+<ul>
+<li><b>不做 Web 后台 / 多租户 / 数据库</b>。交付形态 = 一个 CLI + 一个任务目录 + pi-agent 里的一条 skill。理由：单机单人产线，YAGNI。</li>
+<li><b>不做本地 TTS 训练或微调</b>。首版台词走字幕；TTS 排在 P2（见 §12 里程碑 M6）。</li>
+<li><b>不做角色 LoRA 训练</b>。一致性靠"同一张参考图反复喂入"（ref2va 路线，已实测 r=0.998）。</li>
+<li><b>不引入新的视频底模</b>（Wan / Hunyuan / CogVideoX 等）。本机只在 H3 上验证过加速路线，换底模等于从头踩坑。</li>
+<li><b>不做自动发布</b>（抖/快/视频号）。出片到 MP4 为止。</li>
+</ul>
+</section>
+
+<!-- ================= 1 ================= -->
+<section id="goal">
+<h2>1 · 目标与范围</h2>
+
+<h3>1.1 产品形态</h3>
+<table>
+<thead><tr><th>形态</th><th>输入</th><th>输出</th><th>本方案支持度</th></tr></thead>
+<tbody>
+<tr><td>一句话成片（主目标）</td><td>题材 + 风格 + 时长，例如「古装悬疑，红衣女剑客竹林雨夜，12 镜，60 秒」</td><td>MP4（1920×1056，24fps，带字幕）</td><td><span class="tag ok">首版目标</span></td></tr>
+<tr><td>剧本 + 分镜表</td><td>题材</td><td><code>story.json</code> / <code>shots.json</code>（可人工改后继续跑）</td><td><span class="tag ok">首版目标</span></td></tr>
+<tr><td>单镜快速试片</td><td>一句英文提示词</td><td>5.2 秒 MP4</td><td><span class="tag ok">已跑通</span>（<code>h3turing demo</code>）</td></tr>
+<tr><td>批量剧集（一次 5–10 集）</td><td>题材清单文件</td><td>多个成片 + 质检报告</td><td><span class="tag mid">M5</span></td></tr>
+<tr><td>真人写实短剧</td><td>—</td><td>—</td><td><span class="tag no">不做</span>（H3 出的是动画/漫剧风）</td></tr>
+</tbody>
+</table>
+
+<h3>1.2 成功判据（验收指标）</h3>
+<table>
+<thead><tr><th>指标</th><th>目标值</th><th>怎么测</th></tr></thead>
+<tbody>
+<tr><td>一句话 → 可交付成片</td><td>单次命令跑通，无需人工介入</td><td><code>sd run --brief "…"</code> 退出码 0 且产出 MP4</td></tr>
+<tr><td>60 秒成片 GPU 成本</td><td>≤ 45 分钟</td><td>任务目录内 <code>timing.json</code> 汇总</td></tr>
+<tr><td>跨镜人物一致性</td><td>同角色 ≥ 3 镜，人眼可辨为同一人</td><td>抽帧对比（已有参考帧 <code>h3_ab/shortvideo/v2_f*.png</code>）</td></tr>
+<tr><td>出片成功率</td><td>≥ 90%（单镜重试 3 次内）</td><td>质检报告 <code>report.json</code></td></tr>
+<tr><td>成片规格</td><td>1920×1056 / 24fps / H.264 / 音频不削波</td><td><code>ffprobe</code> + <code>volumedetect</code></td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 2 ================= -->
+<section id="now">
+<h2>2 · 现状盘点（本机资产）</h2>
+<p class="sub">这一节全部是本机事实，方案里所有"复用"承诺都指向这里的某一行。</p>
+
+<h3>2.1 硬件（<code>../system-info.md</code>）</h3>
+<table>
+<thead><tr><th>件</th><th>值</th><th>对本方案的意义</th></tr></thead>
+<tbody>
+<tr><td>GPU</td><td>RTX 2080 Ti 22GB（TU102，68 SM，sm_75，616GB/s 带宽）</td><td>唯一计算卡。<b>无 BF16/FP8 张量核</b> → 视频模型只能 W4A8；出图用 int8 存储 + fp16 计算</td></tr>
+<tr><td>显示卡</td><td>GT 710 2GB（nouveau，Kepler）</td><td>只接显示器，<b>无 CUDA</b>；不影响渲染</td></tr>
+<tr><td>CPU</td><td>2×Xeon E5-2680 v4，28 核 / 56 线程</td><td>后期合成、质检、LLM CPU 回退都用它，<b>不占 GPU</b></td></tr>
+<tr><td>内存</td><td>32GB（EDAC 无错）</td><td>模型加载峰值 + LLM + ffmpeg 的总预算，<b>不够同时开两个大模型</b></td></tr>
+<tr><td>磁盘</td><td>1TB NVMe，<b>可用 631GB</b></td><td>模型已占约 130GB；成片/中间产物按每集 ≤ 300MB 算，可存 2000+ 集</td></tr>
+</tbody>
+</table>
+
+<h3>2.2 已验证的模型资产（本机 <code>/home/a/ai-work/models</code>）</h3>
+<table>
+<thead><tr><th>环节</th><th>权重</th><th>体积</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>视频主模型</td><td class="mono">minimax_h3_fl2va_pruned_w4a8_mixed.safetensors</td><td>—</td><td><span class="tag ok">实测出片</span></td></tr>
+<tr><td>视频（人物一致）</td><td class="mono">minimax_h3_ref2va_pruned_w4a8_mixed.safetensors</td><td>—</td><td><span class="tag ok">r=0.998</span></td></tr>
+<tr><td>中文出图</td><td class="mono">z_image_turbo_int8_convrot.safetensors</td><td>6.2GB</td><td><span class="tag ok">8.3s/张</span></td></tr>
+<tr><td>中文文本编码</td><td class="mono">qwen_3_4b_fp8_mixed.safetensors</td><td>563MB</td><td><span class="tag ok">Z-Image 中文能力来源</span></td></tr>
+<tr><td>控姿态</td><td class="mono">Z-Image-Turbo-Fun-Controlnet-Union.safetensors</td><td>3.1GB</td><td><span class="tag ok">canny/depth/pose</span></td></tr>
+<tr><td>英文写实出图</td><td class="mono">Juggernaut-XL_v9_RunDiffusionPhoto_v2</td><td>6.7GB</td><td><span class="tag ok">只认英文</span></td></tr>
+<tr><td>视频文本编码</td><td class="mono">qwen3vl_4b_fp8_scaled.safetensors</td><td>5.2GB</td><td><span class="tag ok">H3 用</span></td></tr>
+<tr><td>视频 VAE</td><td class="mono">minimax_h3_video_vae_fp16 / audio_vae_fp32</td><td>5.8GB</td><td><span class="tag ok">H3 用</span></td></tr>
+<tr><td>插帧</td><td class="mono">rife_v4.flownet.pkl</td><td>24.6MB</td><td><span class="tag ok">124→247 帧 +8s</span></td></tr>
+<tr><td>加速 LoRA / PDD</td><td class="mono">Turbo 4step / FL2VA-Acc-8Step / Ref2VA-Acc-8Step / FirstBlockCache / PDD-Acc</td><td>12GB</td><td><span class="tag ok">九个工作流已验证</span></td></tr>
+<tr><td>本地 LLM</td><td class="mono">Qwen3.8-27B Q2-LynnStyle（llama.cpp / KVMem）</td><td>21GB</td><td><span class="tag ok">45–48 tok/s</span></td></tr>
+<tr><td>本地 LLM（并发）</td><td class="mono">NInfer 27B（:8082）· vLLM 9B FP8（:8100）</td><td>—</td><td><span class="tag ok">4 路聚合 91.8 tok/s</span></td></tr>
+</tbody>
+</table>
+
+<h3>2.3 已跑通、可直接复用的代码资产</h3>
+<table>
+<thead><tr><th>资产</th><th>位置</th><th>在本方案里的角色</th></tr></thead>
+<tbody>
+<tr><td><code>h3turing</code> Python 库</td><td class="mono">minimax-h3-turing/python/src/h3turing</td><td><b>渲染层的地基</b>：ComfyUI 客户端（重试/静默去重/轮询）、9 个 API 工作流、6 档 tier 预设、开工自检 <code>doctor</code>、同 seed A/B 框架</td></tr>
+<tr><td><code>scripts/shortvideo.py</code></td><td class="mono">minimax-h3-turing/scripts/</td><td><b>多镜驱动</b>：分镜表 → 逐镜出片 → ffmpeg concat 拼成一条（已实测 3 镜成片，人脸/服装三镜一致）</td></tr>
+<tr><td><code>scripts/upscale_video.py</code></td><td class="mono">minimax-h3-turing/scripts/</td><td>640×352 → 1920×1056 交付分辨率（重采样，非 ML 超分）</td></tr>
+<tr><td><code>scripts/zimage_to_h3.py</code></td><td class="mono">minimax-h3-turing/scripts/</td><td>中文出图 → H3 图生视频的桥</td></tr>
+<tr><td><code>workflows/api/*.json</code></td><td class="mono">minimax-h3-turing/workflows/api/</td><td>34 个可 import 的 API 图，含 <code>__H3_PROMPT__</code> / <code>__H3_REF_IMAGE_1__</code> / <code>__H3_FIRST_FRAME__</code> 占位符契约</td></tr>
+<tr><td>ComfyUI + 自定义节点</td><td class="mono">ComfyUI/custom_nodes/（T8 / FirstBlockCache / TeaCache / PDD-Acc / Turbo / QwenScript / GGUF / ClipProj）</td><td>渲染执行体，:8188 已在跑</td></tr>
+<tr><td>本机启动脚本</td><td class="mono">minimax-h3-turing/scripts/h3_launch.local.sh</td><td>带 <code>--reserve-vram 2.5 --vram-headroom 0.5 --disable-pinned-memory</code> + <code>TORCH_DISABLE_NATIVE_JIT=1</code> 的防黑屏启动</td></tr>
+<tr><td>pi-agent 运行时</td><td class="mono">~/.pi/agent</td><td>编排层：已配 minimax / moyu / llama-local / llama-saluki / ninfer-local 五个 provider，装了 herdr-agents、dynamic-workflows、background-tasks 等扩展</td></tr>
+</tbody>
+</table>
+
+<div class="box tip">
+<b>盘点结论：</b>渲染链路（定妆图 → 分镜 → 出镜 → 拼接）在本机<b>已经是一次跑通的三镜成片</b>（<code>h3_ab/shortvideo/shortvideo_v2.mp4</code>）。本方案真正要新写的只有四件事：<b>① 剧本生成 ② 任务编排/状态机 ③ 后期合成（字幕/音量/字幕烧录）④ 自动质检</b>。这是本方案"小"的根本原因。
+</div>
+</section>
+
+<!-- ================= 3 ================= -->
+<section id="limits">
+<h2>3 · 硬约束与红线</h2>
+<p class="sub">这些是物理事实和已踩过的坑，方案里任何设计都不能违反它们。</p>
+
+<table>
+<thead><tr><th>约束</th><th>事实</th><th>对设计的强制要求</th></tr></thead>
+<tbody>
+<tr><td><b>C1 · sm_75 无 BF16/FP8 张量核</b></td><td>Turing 张量核只支持 FP16/INT8；BF16 是模拟实现（慢约 7 倍）</td><td>视频一律 <b>W4A8</b>（量化误差 0.0110；W4A4 是 0.2005，18 倍且彩色撕裂 → 永久排除）；出图一律 <b>int8 存储 + fp16 计算</b></td></tr>
+<tr><td><b>C2 · 单卡 22GB 显存</b></td><td>H3 出片时占用 ≈20GB；本地 27B LLM 需 13–17GB</td><td><b>两者不能共存</b> → 全流程阶段串行 + 显存门控（见 §10）</td></tr>
+<tr><td><b>C3 · 32GB 内存</b></td><td>模型加载峰值 + ffmpeg + LLM 上下文同驻会 OOM</td><td>同一时刻只加载一个重模型；大文件下载/解压避开渲染时段</td></tr>
+<tr><td><b>C4 · H3 音画帧数绑定</b></td><td>181 帧 → 音轨 8.0s；121 帧 → 5.2s；插帧只扩画面不扩声</td><td>需要更长音轨的镜头必须<b>原生生成足够帧数</b>；RIFE 只能用于"同长度提流畅度"（124→247@48fps）</td></tr>
+<tr><td><b>C5 · 缓存档不可复现</b></td><td>T8/FBC/TeaCache 命中会 fork 采样轨迹，同 seed 出不同画面</td><td>成片档只允许 <code>tiers.reproducible_only()</code>；缓存档仅用于草稿</td></tr>
+<tr><td><b>C6 · T8 默认参数是负优化</b></td><td>阈值 0.12 在 4 步路线命中 0/4，纯加 175MB 开销</td><td>缓存阈值固定用 1.0（4 步路线）／0.60（FirstBlockCache 路线），不开放给用户乱调</td></tr>
+<tr><td><b>C7 · ComfyUI 无鉴权</b></td><td>监听 <code>0.0.0.0</code> 时同网段任何人可提交任务、读 output</td><td>生产模式改绑 <code>127.0.0.1</code> 或 tailscale 地址 <code>100.69.133.37</code>；对外只开只读静态服务</td></tr>
+<tr><td><b>C8 · 冷启动 40–60s</b></td><td>模型首次驻留显存要 40–60 秒，热运行后每镜才是 166–198s</td><td>计时口径要分开报"冷/热"；批量作业先投一镜预热再计时</td></tr>
+<tr><td><b>C9 · prompt_id 静默去重</b></td><td>同输入重提会被静默去重（A/B 实验会"消失"）</td><td>每次改参数必改 seed（<code>bump_seed()</code>），或带唯一 <code>client_id</code></td></tr>
+<tr><td><b>C10 · 显存被打爆会黑屏</b></td><td>TDR / OOM 黑屏；长片（15s+）需 <code>--reserve-vram 4</code></td><td>渲染参数固定化：<code>--reserve-vram 2.5 --vram-headroom 0.5 --disable-pinned-memory</code>；≥15s 片段改 4</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 4 ================= -->
+<section id="arch">
+<h2>4 · 总体架构</h2>
+
+<h3>4.1 分层图</h3>
+<div class="flow">
+<span class="n">人（选题/审片）</span><span class="ar">→</span>
+<span class="n">pi-agent 编排层</span><span class="ar">→</span>
+<span class="n">任务队列/状态机</span><span class="ar">→</span>
+<span class="n">LLM 层</span><span class="ar">→</span>
+<span class="n">渲染层 ComfyUI</span><span class="ar">→</span>
+<span class="n">后期层 ffmpeg</span><span class="ar">→</span>
+<span class="n">质检层</span><span class="ar">→</span>
+<span class="n out">成片</span>
+</div>
+
+<table>
+<thead><tr><th>层</th><th>职责</th><th>实现</th><th>GPU</th></tr></thead>
+<tbody>
+<tr><td><b>编排层</b></td><td>把"一句话"翻译成一串阶段任务；驱动 LLM、监控渲染、汇总报告</td><td>pi-agent（skill + <code>pi --print</code> / <code>--mode json</code> 无头调用）</td><td>无</td></tr>
+<tr><td><b>调度层</b></td><td>任务目录 / 状态机 / 断点续跑 / 显存门控 / 重试</td><td>新写：<code>sd</code> CLI（文件型 job 目录，<b>不引数据库</b>）</td><td>无</td></tr>
+<tr><td><b>LLM 层</b></td><td>剧本、分镜、台词、字幕</td><td>抽象层 <code>llm.py</code>：本地 llama.cpp <code>:8080</code> 优先 → 云 API（minimax/moyu）兜底</td><td>占 13–17GB，<b>与渲染互斥</b></td></tr>
+<tr><td><b>渲染层</b></td><td>定妆图（Z-Image）、分镜控图（CN Union）、视频镜（H3 W4A8）</td><td>ComfyUI <code>:8188</code> + <code>h3turing</code> 客户端 + 现有 API 工作流</td><td>占 ≈20GB</td></tr>
+<tr><td><b>后期层</b></td><td>拼接、字幕烧录、音量归一（−1dB limiter）、1080p 交付</td><td>ffmpeg（imageio-ffmpeg 静态构建，<b>独立 venv，不碰 ComfyUI 的 pip</b>）</td><td>无</td></tr>
+<tr><td><b>质检层</b></td><td>时长/分辨率/黑帧/静音/削波/缺镜检查 + 人眼抽检清单</td><td><code>ffprobe</code> + <code>volumedetect</code> + 黑帧检测</td><td>无</td></tr>
+</tbody>
+</table>
+
+<h3>4.2 端到端时序（一集 60 秒短剧）</h3>
+<pre><code>阶段        组件                占用           本机实测/推算耗时
+──────────────────────────────────────────────────────────────────────────────
+P0 选题     人 + pi-agent        —             —（人工 1 分钟）
+P1 剧本     llama.cpp :8080     GPU 13-17GB   3-8 分钟（剧本 800-1500 字）
+             ↓ 阶段切换：停 llama-server，腾空显存
+P2 定妆图   ComfyUI / Z-Image    GPU ≈10GB     8.3s × 3-6 张 ≈ 1 分钟
+P3 分镜     llama.cpp（复用 P1 上下文）        2-5 分钟
+             ↓ 阶段切换：再腾一次显存
+P4 出镜     ComfyUI / H3 W4A8   GPU ≈20GB     166-198s × 12 镜 ≈ 36 分钟
+P5 后期     ffmpeg (CPU 56线程)  无            1-3 分钟
+P6 质检     ffprobe + 脚本      无            < 1 分钟
+──────────────────────────────────────────────────────────────────────────────
+合计（成片档）                                                    ≈ 45 分钟</code></pre>
+
+<div class="box warn">
+<b>为什么要"阶段切换"这么麻烦：</b>这就是 C2（单卡 22GB）的直接后果。缓解手段有三条，按优先级：
+<b>①</b> 剧本阶段一次性把 story + shots 全部生成完再进渲染（避免反复起停 LLM）；
+<b>②</b> 本地 LLM 用 llama.cpp 时显存吃 13–17GB，<b>可以只用 CPU 模式跑剧本</b>（<code>-ngl 0</code>，但只有 1.5–2.5 tok/s，仅在短 prompt 时用）；
+<b>③</b> 剧本质量不达标时切云 API（minimax/moyu 已配好 key），GPU 完全空出来给渲染 —— <b>这是最省事的方案</b>，代价是剧本这一步不"完全本地"。<br>
+<b>默认策略：</b>本地 LLM 优先，出片前<b>保证</b>显存干净（调度层强制门控，见 §10.2）。
+</div>
+</section>
+
+<!-- ================= 5 ================= -->
+<section id="models">
+<h2>5 · 本地模型与算力选型</h2>
+<p class="sub">每个环节选了什么、为什么、实测数字是多少。</p>
+
+<h3>5.1 选型总表</h3>
+<table>
+<thead><tr><th>环节</th><th>选定方案</th><th>本机耗时【实测】</th><th>可替代</th><th>判定理由</th></tr></thead>
+<tbody>
+<tr><td>剧本 / 分镜 / 台词</td><td>Qwen3.8-27B Q2（llama.cpp :8080），云兜底 minimax/moyu</td><td>45–48 tok/s 单流；NInfer 4 路聚合 91.8 tok/s</td><td>vLLM 9B FP8（:8100，聚合 75–259 tok/s）</td><td>27B 中文剧本能力够用；Q2 量化已在本机验证</td></tr>
+<tr><td>中文定妆图 / 分镜图</td><td>Z-Image-Turbo（int8-convrot）+ Qwen3-4B 中文编码器</td><td>8.3s/张@1024²，16:9 6.0s，i2i 8–18s，CN 12.3s</td><td>SDXL Juggernaut（18s/张，<b>只认英文</b>）</td><td>剧本是中文的，中文直出省掉翻译环节；8s 一张</td></tr>
+<tr><td>姿态/构图控制</td><td>Z-Image ControlNet Union（canny/depth/pose）</td><td>12.3s</td><td>无（SDXL 线没有 ControlNet）</td><td>漫剧分镜控姿态的唯一本地方案</td></tr>
+<tr><td>视频（主）</td><td>MiniMax-H3 FL2VA W4A8 + Turbo 4step LoRA（bypass 方式挂载）</td><td>t2v 166s / 镜（5.2s@640×352）</td><td>PDD-Acc nfe=4（227s）· PDD8（399s）</td><td>bypass 比 merge 到权重省 29% 且同 seed 可复现（124/124 帧一致）</td></tr>
+<tr><td>视频（人物一致）</td><td>MiniMax-H3 Ref2VA W4A8（<code>&lt;Picture 1&gt;</code> 喂参考图）</td><td>i2v 182–197s / 镜</td><td>i2v 首帧锚定（r=0.998，×27.4）</td><td>多镜同角色必须靠它</td></tr>
+<tr><td>草稿提速</td><td>bypass + FirstBlockCache 0.60</td><td>t2v 95s / i2v 103s</td><td>FBC 1.0（67s，画面梯度掉到 65%）</td><td>只用于选构图</td></tr>
+<tr><td>流畅度</td><td>RIFE v4（ComfyUI 原生 FrameInterpolate）</td><td>+8s，124→247 帧 @48fps</td><td>原生 362 帧（24.5 分钟）</td><td>音轨长度不变（C4）；快速运动镜仍需抽检</td></tr>
+<tr><td>交付分辨率</td><td><code>upscale_video.py --scale 3</code>（重采样）</td><td>640×352 → 1920×1056</td><td>ML 超分（本机无权重，nvidia-vfx 需 TensorRT，装不上）</td><td>重采样可交付，边缘不如原生锐利</td></tr>
+<tr><td>音频</td><td>H3 原生环境音（与画面同源）</td><td>随视频产出</td><td>后期铺 BGM/音效</td><td>台词配音走字幕（P2 见 §12 M6）</td></tr>
+</tbody>
+</table>
+
+<h3>5.2 视频档位速查（直接来自 <code>h3turing.tiers</code>，别自己重造）</h3>
+<table>
+<thead><tr><th>档位</th><th>路由</th><th>步数</th><th>本机耗时/镜</th><th>可复现</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>t2v-final</code></td><td>文生视频 + bypass Turbo LoRA</td><td>4</td><td>166s</td><td><span class="tag ok">是</span></td><td><b>成片默认</b></td></tr>
+<tr><td><code>i2v-final</code></td><td>图生视频 + bypass</td><td>4</td><td>182s</td><td><span class="tag ok">是</span></td><td><b>成片默认（推荐）</b></td></tr>
+<tr><td><code>i2v-rife</code></td><td>i2v-final + RIFE×2@48fps</td><td>4</td><td>198s</td><td><span class="tag ok">是</span></td><td>要顺滑就选它</td></tr>
+<tr><td><code>i2v-draft</code></td><td>i2v + FirstBlockCache 0.60</td><td>4</td><td>103s</td><td><span class="tag no">否</span></td><td>草稿</td></tr>
+<tr><td><code>t2v-draft</code></td><td>t2v + FirstBlockCache 0.60</td><td>4</td><td>95s</td><td><span class="tag no">否</span></td><td>草稿</td></tr>
+<tr><td><code>t2v-draft-rough</code></td><td>t2v + FBC 1.0</td><td>4</td><td>67s</td><td><span class="tag no">否</span></td><td>只看构图</td></tr>
+<tr><td><code>t2v-pddacc4</code></td><td>PDD-Acc nfe=4</td><td>4</td><td>227s</td><td><span class="tag ok">是</span></td><td>要更高画质</td></tr>
+<tr><td><code>t2v-pddacc8</code></td><td>PDD-Acc nfe=8</td><td>8</td><td>399s</td><td><span class="tag ok">是</span></td><td>最高画质，慢</td></tr>
+<tr><td><code>i2v-ultra</code> / <code>t2v-ultra</code></td><td>PDD8 + T8（需 master 环境）</td><td>8</td><td>192s / 210s</td><td><span class="tag no">否</span></td><td>极速草稿</td></tr>
+</tbody>
+</table>
+<div class="box info">
+<b>调用方式：</b><code>h3turing.get("i2v-final")</code> 拿档位（含工作流 JSON、LoRA 名、步数、可复现标记），<code>h3turing.tiers.reproducible_only()</code> 拿"成片安全"的档位集合。<b>成片路径禁止手工选缓存档</b>——这条纪律要写进调度层代码，不靠人记。
+</div>
+</section>
+
+<!-- ================= 6 ================= -->
+<section id="decisions">
+<h2>6 · 十个关键决策</h2>
+<table>
+<thead><tr><th>#</th><th>决策</th><th>理由 / 证据</th><th>放弃了什么</th></tr></thead>
+<tbody>
+<tr><td>D1</td><td>视频底模只用 MiniMax-H3 W4A8</td><td>本机唯一有实测数据 + 9 个工作流 + 加速路线（Turbo/PDD/T8/FBC/TeaCache）的底模；换底模等于重头踩 sm_75 的量化坑</td><td>Wan / Hunyuan / CogVideoX 等（后述）</td></tr>
+<tr><td>D2</td><td>中文链路全用 Z-Image，SDXL 只做英文写实风</td><td>Z-Image 8.3s、中文直出、i2i 保角色、自带 CN Union；SDXL 18s 且中文基本不认</td><td>统一底模</td></tr>
+<tr><td>D3</td><td>人物一致性 = 同一张参考图反复喂入（ref2va），不训练角色 LoRA</td><td>已有实测 r=0.998、attribution ×27.4、三镜人脸/服装一致；LoRA 训练成本与调参量远超收益</td><td>角色 LoRA</td></tr>
+<tr><td>D4</td><td>成片走 bypass LoRA 档，缓存档只用于草稿</td><td>bypass 166s vs merge 232s（省 29%）且同 seed 可复现；缓存命中 fork 轨迹</td><td>缓存档的 40% 提速用于成片</td></tr>
+<tr><td>D5</td><td>阶段串行 + 显存门控，不做多任务并发</td><td>C2：22GB 装不下 LLM + H3；且 ComfyUI 自身是单队列</td><td>流水线并发（吞吐会翻倍）</td></tr>
+<tr><td>D6</td><td>剧本走本地 27B，云 API 只做兜底</td><td>本机已装好、45–48 tok/s、零外网依赖；但 Q2 量化下的剧本质量要 M2 实测才知道，兜底通道必须先建好</td><td>完全本地化（当前约束下不成立）</td></tr>
+<tr><td>D7</td><td>首版不做本地 TTS，台词用字幕 + 原生环境音</td><td>本机<b>没有任何 TTS 权重</b>；H3 原生音频只有环境音，没有台词；引入 TTS 要单独占显存窗口且需装新模型</td><td>有声短剧（首版形态：<b>漫剧 / 动态漫</b>）</td></tr>
+<tr><td>D8</td><td>编排用 pi-agent，不自造 agent 框架</td><td>pi 已配 5 个 provider、装好 skills / subagents / workflows 扩展；<code>pi --print</code> 可无头驱动</td><td>自建 LLM 调用循环</td></tr>
+<tr><td>D9</td><td>交付形态 = CLI + 任务目录，不做 Web 后台</td><td>单人单机产线；pi-agent 的 TUI 已经能当"操作界面"</td><td>Web 控制台、账号体系</td></tr>
+<tr><td>D10</td><td>1080p 交付用重采样，不用 ML 超分</td><td>本机无放大模型权重，<code>nvidia-vfx</code> 需 TensorRT 装不上，静态 ffmpeg 无 CUDA 滤镜</td><td>真超分清晰度</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 7 ================= -->
+<section id="repo">
+<h2>7 · 系统形态与目录结构</h2>
+
+<h3>7.1 新增仓库（唯一的新代码）</h3>
+<div class="box info">
+本方案<b>不改动</b> <code>minimax-h3-turing</code>、<code>ComfyUI</code>、<code>ai-2080ti22g</code> 三个既有仓库的代码，只<b>新建一个</b> <code>/home/a/ai-work/workspace/shortdrama</code>，以「薄编排层」的方式包住既有资产。改动既有仓库 = 回归风险，本方案不接受。
+</div>
+
+<pre><code>/home/a/ai-work/workspace/shortdrama/
+├── README.md                 # 一页说明 + 常用命令
+├── sd                       # 主 CLI 入口（bash 或 python 均可，本方案用 python3）
+├── shortdrama/
+│   ├── llm.py                # LLM 抽象层：本地 llama.cpp → 云兜底，统一 chat() 接口
+│   ├── story.py              # P1：题材 → story.json（schema 校验 + 重试）
+│   ├── shots.py              # P3：story → shots.json（英文提示词 + 参考图索引）
+│   ├── cast.py               # P2：定妆图生成/挑选（Z-Image t2i/i2i/CN）
+│   ├── render.py             # P4：分镜 → clips/*.mp4（调 h3turing client + tier）
+│   ├── assemble.py           # P5：ffmpeg 拼接 / 字幕 / 音量 / 1080p
+│   ├── qc.py                 # P6：自动质检 → report.json
+│   ├── job.py                # 任务目录、状态机、断点续跑、重试
+│   ├── gate.py               # 显存门控（等 ComfyUI 空闲、LLM 腾空显存）
+│   └── config.py             # 唯一配置文件（路径、档位、端口、超时）
+├── prompts/                  # 提示词模板（剧本 / 分镜 / 字幕）
+├── jobs/                     # 任务目录（每个一集一个子目录）
+└── logs/</code></pre>
+
+<h3>7.2 复用关系（不重复造轮子）</h3>
+<table>
+<thead><tr><th>新模块</th><th>复用的既有资产</th><th>新增代码量估计</th></tr></thead>
+<tbody>
+<tr><td><code>render.py</code></td><td><code>h3turing.client.ComfyUI</code>（重试/轮询/上传/下载）· <code>tiers</code> · <code>workflows</code> · <code>scripts/shortvideo.py</code> 的多镜循环</td><td>≈ 150 行</td></tr>
+<tr><td><code>cast.py</code></td><td><code>workflows/api/zimage_turbo_t2i_api.json</code> / <code>zimage_turbo_i2i_api.json</code> / <code>zimage_turbo_cn_api.json</code> · <code>scripts/zimage_to_h3.py</code></td><td>≈ 120 行</td></tr>
+<tr><td><code>assemble.py</code></td><td><code>scripts/shortvideo.py</code> 的 concat 段 · <code>scripts/upscale_video.py</code> · imageio-ffmpeg</td><td>≈ 180 行</td></tr>
+<tr><td><code>llm.py</code></td><td>OpenAI 兼容端点（<code>http://127.0.0.1:8080/v1</code>）· pi 已配 provider</td><td>≈ 80 行</td></tr>
+<tr><td><code>story.py</code> / <code>shots.py</code></td><td>提示词模板 + JSON schema 校验（标准库 <code>json</code> + 手写校验，<b>不引 pydantic</b>）</td><td>≈ 200 行</td></tr>
+<tr><td><code>job.py</code> / <code>gate.py</code> / <code>qc.py</code></td><td><code>urllib</code> / <code>subprocess</code> / <code>nvidia-smi</code> / <code>ffprobe</code></td><td>≈ 250 行</td></tr>
+</tbody>
+</table>
+<div class="k">
+预估新增代码 <b>≈ 1000 行</b>（<code>render.py</code> 与 <code>assemble.py</code> 里大部分是搬现有脚本的逻辑）。这个体量对应 <b>3–4 人日</b>，不是"搭平台"的量级。
+</div>
+
+<h3>7.3 pi-agent 侧交付物</h3>
+<table>
+<thead><tr><th>形态</th><th>内容</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>Skill</td><td><code>~/.pi/agent/skills/shortdrama/SKILL.md</code>：描述"怎么从一句话到成片"，指向 <code>shortdrama/</code> 的 CLI 与 prompt 模板</td><td>在 pi 里说"做个短剧：竹林雨夜，红衣女剑客"就能触发</td></tr>
+<tr><td>无头调用</td><td><code>pi --print --model llama-local:qwen38-27b-lynstyle "…"</code></td><td>批处理/定时任务（<code>--mode json</code> 出事件流）</td></tr>
+<tr><td>工作流</td><td>用 pi 的 <code>workflow</code> 把"批量 10 集"扇出为并行子任务（注意：<b>渲染仍串行</b>，并行只发生在 LLM/质检这类 CPU 阶段）</td><td>批量生产</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 8 ================= -->
+<section id="schema">
+<h2>8 · 数据契约</h2>
+<p class="sub">三个 JSON 是整条链路的骨架。中间件越少越好，所以只有这三份。</p>
+
+<h3>8.1 <code>story.json</code>（P1 产出，人可改）</h3>
+<pre><code>{
+  "title": "竹林雨夜·第三更",
+  "genre": "古装悬疑",
+  "style_cn": "电影感，浅景深，冷调高对比，胶片颗粒",
+  "style_en": "cinematic, shallow depth of field, cold teal high contrast, film grain",
+  "duration_s": 60,
+  "shot_count": 12,
+  "characters": [
+    {"id": "c1", "name": "阿棠", "desc_cn": "红衣女剑客，长黑发，左颊有疤",
+     "ref_image": "cast/c1.png", "voice": "女声偏低"}
+  ],
+  "scenes": [
+    {"id": "s1", "idx": 1, "chars": ["c1"], "beat": "开场：雨夜竹林，人物背影",
+     "duration_s": 5.2, "shot_type": "wide",
+     "prompt_en": "&lt;Picture 1&gt; shows the same character. ...",
+     "dialogue_cn": "有人跟着我。", "subtitle_cn": "有人跟着我。",
+     "sfx": "雨打竹叶，远处雷声"}
+  ],
+  "ending": "悬念收尾，不揭示凶手"
+}</code></pre>
+<div class="k">
+<b>关键设计：</b><code>prompt_en</code> 与中文并存 —— 中文给人看（审稿/字幕），英文喂 H3（它的文本编码器是英文的）。<b>两套语言不许混用</b>：中文直接喂 H3 效果差。
+</div>
+
+<h3>8.2 <code>shots.json</code>（P3 产出 = 现有 <code>shortvideo.py</code> 的输入格式）</h3>
+<pre><code>[
+  "&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. She stands alone among tall bamboo stalks ...",
+  "&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. She walks slowly away from camera ..."
+]</code></pre>
+<div class="k">
+这是<b>已存在的格式</b>（<code>h3_ab/shortvideo/shots.json</code> 就是它），所以渲染层零改造成本。<b>不要发明新格式。</b>
+</div>
+
+<h3>8.3 任务目录 <code>jobs/&lt;job-id&gt;/</code>（调度层唯一状态）</h3>
+<pre><code>jobs/20261102-1435-bamboo/
+├── job.json           # 状态机：stage/status/seed/tier/错误/重试次数
+├── story.json         # P1 产物
+├── shots.json         # P3 产物
+├── cast/              # P2 产物：c1.png / c1_alt.png / …
+├── clips/             # P4 产物：01.mp4 … 12.mp4（每镜一个文件）
+├── episode.mp4        # P5 产物（交付物）
+├── subtitles.srt      # P5 产物
+├── report.json        # P6 产物：质检结果
+├── timing.json        # 每阶段耗时（冷/热分开）
+└── logs/              # stdout/stderr 全量留存</code></pre>
+
+<h3>8.4 状态机</h3>
+<pre><code>PENDING → STORY → CAST → SHOTS → RENDER → ASSEMBLE → QC → DONE
+                        ↑___________ 任意一步失败 → RETRY(≤3) → FAILED
+RENDER 内部逐镜：shot_01 … shot_12，每镜独立记录状态（断点续跑粒度 = 单镜）</code></pre>
+<div class="k">
+断点续跑粒度做到<b>单镜</b>是刻意的：单镜 166–198s，一集 12 镜 36 分钟，崩在第 11 镜不该重跑前 10 镜。
+</div>
+</section>
+
+<!-- ================= 9 ================= -->
+<section id="stages">
+<h2>9 · 流水线六阶段细则</h2>
+
+<h3>9.1 P1 剧本</h3>
+<table>
+<thead><tr><th>项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>输入</td><td>题材一句话 + 风格 + 时长 + 镜头数</td></tr>
+<tr><td>做法</td><td>提示词模板 → 本地 LLM → 结构化 JSON；<b>schema 校验失败则带错误信息重试（≤2 次）</b>；仍失败 → 云 API</td></tr>
+<tr><td>产出</td><td><code>story.json</code>（§8.1）</td></tr>
+<tr><td>验收</td><td>镜头数与时长吻合（12 镜 × 5.2s ≈ 60s）；每镜有 <code>prompt_en</code> + <code>subtitle_cn</code>；角色描述非空</td></tr>
+<tr><td>风险</td><td>Q2 量化的 27B 可能写出冗长散文或镜头数漂移 → 模板里<b>强制输出 JSON + 镜头数上限</b>，代码做二次裁剪</td></tr>
+</tbody>
+</table>
+
+<h3>9.2 P2 定妆图（角色锚点）</h3>
+<table>
+<thead><tr><th>项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>输入</td><td><code>story.json</code> 的角色描述</td></tr>
+<tr><td>做法</td><td>Z-Image <b>t2i（中文提示词）</b> 生成候选 2–4 张 → 按一致性挑 1 张为主参考 + 1 张备选 → 后续分镜用 <b>i2i（denoise 0.6–0.75）</b> 派生变体，保持同一张脸</td></tr>
+<tr><td>产出</td><td><code>cast/c1.png</code>（主）、<code>cast/c1_alt.png</code>（备选，供 ref2va 的 <code>&lt;Picture 2&gt;</code>）</td></tr>
+<tr><td>验收</td><td>主参考图脸型/服装可辨、可复用于全剧；参考图必须<b>在渲染前 upload 到 ComfyUI input/</b>（<code>shortvideo.py</code> 已有 <code>upload_image()</code>）</td></tr>
+<tr><td>关键点</td><td>定妆图质量 = 全剧人物一致性的天花板。这一步<b>多花 2 分钟挑图，胜过重拍 10 镜</b></td></tr>
+</tbody>
+</table>
+
+<h3>9.3 P3 分镜</h3>
+<table>
+<thead><tr><th>项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>输入</td><td><code>story.json</code> + 参考图清单</td></tr>
+<tr><td>做法</td><td>LLM 把每镜翻成 <b>H3 风格的英文提示词</b>：<code>&lt;Picture 1&gt; shows the same character. 动作 + 镜头运动 + 光线 + 风格 + natural ambient audio: …</code></td></tr>
+<tr><td>产出</td><td><code>shots.json</code>（§8.2，格式与现有脚本一致）</td></tr>
+<tr><td>验收</td><td>每条含 <code>&lt;Picture 1&gt;</code> 引用；含 <code>natural ambient audio</code> 描述（否则该镜没声音）；镜头顺序与剧本 beat 一致</td></tr>
+<tr><td>提示词纪律</td><td>沿用现有已验证句式（<code>&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. …, cinematic …, natural ambient audio: …</code>）——<b>这是实测出片的句式</b>，不要让 LLM 自由发挥结构</td></tr>
+</tbody>
+</table>
+
+<h3>9.4 P4 出镜（渲染）</h3>
+<table>
+<thead><tr><th>项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>输入</td><td><code>shots.json</code> + <code>cast/</code></td></tr>
+<tr><td>做法</td><td>逐镜：套 <code>i2v-final</code>（或 <code>i2v-rife</code>）模板 → 替换 <code>__H3_PROMPT__</code> / <code>__H3_REF_IMAGE_1__</code> → <code>POST /prompt</code> → 轮询 <code>/history/{pid}</code> → 下载产物 → 落盘 <code>clips/NN.mp4</code></td></tr>
+<tr><td>产出</td><td><code>clips/*.mp4</code>（每镜 640×352 / 24fps / 带音轨）</td></tr>
+<tr><td>纪律</td><td>① seed 每镜递增（避免 prompt_id 静默去重 C9）；② 成片只允许 <code>reproducible_only()</code> 档；③ 单镜失败重试 ≤3 且每次换 seed</td></tr>
+<tr><td>验收</td><td>每镜：时长 ≈ 5.2s、分辨率 640×352、<b>有音轨</b>、非黑帧</td></tr>
+</tbody>
+</table>
+
+<h3>9.5 P5 后期合成</h3>
+<table>
+<thead><tr><th>步骤</th><th>做法</th><th>参数</th></tr></thead>
+<tbody>
+<tr><td>① 拼接</td><td>concat demuxer 逐样本 copy（音轨不重编码）</td><td><code>-c copy</code>，要求各镜参数完全一致</td></tr>
+<tr><td>② 字幕</td><td><code>story.json</code> 的 <code>subtitle_cn</code> → SRT → 烧录</td><td>思源黑体 / 白字黑边 / 底部安全区</td></tr>
+<tr><td>③ 音量</td><td>统一响度 + 限幅</td><td><b>−1dB limiter</b>（H3 音轨实测 mean −14~−34dB，缓存档低 8dB，务必归一）</td></tr>
+<tr><td>④ 交付分辨率</td><td><code>upscale_video.py --scale 3</code>：640×352 → 1920×1056</td><td>音轨逐样本不变</td></tr>
+<tr><td>⑤ 输出</td><td>H.264 + AAC，24fps</td><td><code>episode.mp4</code></td></tr>
+</tbody>
+</table>
+
+<h3>9.6 P6 自动质检</h3>
+<table>
+<thead><tr><th>检查项</th><th>方法</th><th>不通过怎么办</th></tr></thead>
+<tbody>
+<tr><td>时长</td><td><code>ffprobe</code> 读时长，与 story 目标差 &gt; 0.5s</td><td>告警（可能是某镜帧数不对）</td></tr>
+<tr><td>分辨率/帧率</td><td>1920×1056 / 24fps</td><td>阻断</td></tr>
+<tr><td>黑帧</td><td><code>blackdetect</code></td><td>标记该镜，重出</td></tr>
+<tr><td>静音</td><td><code>silencedetect</code>（H3 无音轨时）</td><td>标记该镜</td></tr>
+<tr><td>削波</td><td><code>volumedetect</code> max &gt; −0.3 dB</td><td>重挂 limiter</td></tr>
+<tr><td>缺镜</td><td>镜头数 vs story</td><td>阻断</td></tr>
+<tr><td>人眼抽检</td><td>生成 contact sheet（每镜抽 1 帧 + 定妆图并排）</td><td>人工确认一致性</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 10 ================= -->
+<section id="sched">
+<h2>10 · 调度与资源排期</h2>
+
+<h3>10.1 GPU 独占时间线（一集 60 秒）</h3>
+<pre><code>时间 →
+  0     5     10    15    20    25    30    35    40    45 分钟
+  ├──────┤
+  │ P1 剧本 │  ← llama.cpp 占 13-17GB（独占 GPU）
+  ├────────┤
+  │        ├─ 停 LLM → 门控等显存回落到 <2GB ─┐
+  │ P2 定妆图 │  ← Z-Image ≈10GB              │
+  │        ├─ 门控（可选：此时正好重启 LLM 也不冲突）
+  ├────────┤                                  │
+  │ P3 分镜 │  ← LLM（若 P1 上下文还在，则先停 LLM再渲染）│
+  │        ├─ 门控 ────────────────────────────┤
+  │ P4 出镜 ×12 镜（166-198s/镜）              │
+  │        ├─ 门控 ────────────────────────────┤
+  │ P5 后期 │  ← 纯 CPU
+  │ P6 质检 │  ← 纯 CPU
+  └────────┴──────────────────────────────────┘</code></pre>
+
+<h3>10.2 显存门控（<code>gate.py</code>）规则</h3>
+<ol>
+<li><b>渲染前置条件</b>：<code>nvidia-smi --query-gpu=memory.used</code> &lt; 2000 MiB（ComfyUI 模型已卸载）<b>且</b> 无其它 LLM 进程（<code>pgrep -f llama-server</code> 为空）。</li>
+<li><b>LLM 前置条件</b>：ComfyUI 队列为空（<code>GET /queue</code> 返回空），且显存占用 &lt; 4000 MiB。</li>
+<li><b>超时</b>：门控等 300s 超时则报"显存被占"，并打印占用进程，<b>不自动杀进程</b>（避免杀掉正在出的成片）。</li>
+<li><b>安全阈值</b>：H3 需要 ≈20GB，<code>--reserve-vram 2.5</code> 已为显示与驱动留余量；因此渲染期间<b>严禁</b>启动任何 LLM。</li>
+</ol>
+
+<h3>10.3 断点续跑与幂等</h3>
+<table>
+<thead><tr><th>层级</th><th>续跑粒度</th><th>实现</th></tr></thead>
+<tbody>
+<tr><td>阶段级</td><td>P1…P6 任一阶段</td><td><code>job.json</code> 的 <code>stage</code> 字段</td></tr>
+<tr><td>单镜级</td><td>12 镜中的任一镜</td><td><code>clips/NN.mp4</code> 存在 + 质检通过则跳过</td></tr>
+<tr><td>幂等键</td><td>（story 摘要 + tier + seed + 参考图 hash）</td><td>键变了才重出，避免"改了字幕就重拍全片"</td></tr>
+</tbody>
+</table>
+
+<h3>10.4 单机 vs 未来多机</h3>
+<div class="k">
+本方案按<b>单机单卡</b>设计。要扩到多机时，<b>只需改两处</b>：① <code>config.py</code> 里 ComfyUI/LLM 的 base URL；② 调度层加"选哪台机器"的路由。<b>渲染层、剧本层、后期层代码不动</b>。这是刻意留的扩展缝，但<b>现在不实现</b>。
+</div>
+</section>
+
+<!-- ================= 11 ================= -->
+<section id="capacity">
+<h2>11 · 产能与成本模型</h2>
+
+<h3>11.1 单集 GPU 耗时【推算】（基于本机实测单镜耗时）</h3>
+<table>
+<thead><tr><th>成片长度</th><th>镜头数</th><th>成片档（i2v-final 182s）</th><th>草稿档（i2v-draft 103s）</th><th>加 RIFE（198s）</th></tr></thead>
+<tbody>
+<tr><td>15 秒</td><td>3 镜</td><td>≈ 10 分钟</td><td>≈ 6 分钟</td><td>≈ 11 分钟</td></tr>
+<tr><td>30 秒</td><td>6 镜</td><td>≈ 20 分钟</td><td>≈ 12 分钟</td><td>≈ 21 分钟</td></tr>
+<tr><td><b>60 秒</b></td><td>12 镜</td><td><b>≈ 38 分钟</b></td><td>≈ 22 分钟</td><td>≈ 41 分钟</td></tr>
+<tr><td>180 秒</td><td>35 镜</td><td>≈ 1 小时 48 分</td><td>≈ 62 分钟</td><td>≈ 1 小时 57 分</td></tr>
+<tr><td>600 秒</td><td>116 镜</td><td>≈ 5 小时 53 分</td><td>≈ 3 小时 20 分</td><td>≈ 6 小时 24 分</td></tr>
+</tbody>
+</table>
+<div class="k">
+未计入：冷启动 40–60s、剧本 5–15 分钟、定妆图 1–2 分钟、后期 1–3 分钟、失败重试（按 10% 失败率、每次重试 1 镜估）。<b>一集 60 秒短剧总占用 ≈ 45–55 分钟</b>（成片档）。
+</div>
+
+<h3>11.2 日产能【推算】</h3>
+<table>
+<thead><tr><th>可用时长</th><th>60 秒短剧</th><th>180 秒短剧</th><th>15 秒片段（素材库）</th></tr></thead>
+<tbody>
+<tr><td>8 小时/天</td><td>≈ 9 集</td><td>≈ 3 集</td><td>≈ 45 段</td></tr>
+<tr><td>19 小时/天（80% 利用率）</td><td>≈ 21 集</td><td>≈ 7 集</td><td>≈ 105 段</td></tr>
+</tbody>
+</table>
+<div class="box warn">
+这是<b>理论上限</b>：GPU 全程只干渲染，没有人工审片、没有重跑。实际以 <b>一半</b>规划产能更靠谱。另外<b>人工审片是真正的瓶颈</b>——12 镜一集，每集审 3–5 分钟，10 集/天就是 50 分钟纯看片。
+</div>
+
+<h3>11.3 成本口径</h3>
+<ul>
+<li><b>边际成本 ≈ 0</b>（电费另算：2080Ti 渲染满载 ≈ 250W，整集 60 秒短剧约 0.2–0.3 kWh ≈ 0.2 元）。</li>
+<li><b>真实成本 = 人工审片时间 + 返工</b>。方案里所有"省时间"的优化（草稿档、缓存档）本质都是<b>把审片时间前置到低成本阶段</b>。</li>
+<li><b>脚本阶段</b>是唯一可能产生外部费用的环节（云 API 兜底时）。</li>
+</ul>
+</section>
+
+<!-- ================= 12 ================= -->
+<section id="ms">
+<h2>12 · 里程碑与验收</h2>
+<table>
+<thead><tr><th>里程碑</th><th>工期</th><th>交付物</th><th>验收标准</th></tr></thead>
+<tbody>
+<tr><td><b>M0 · 基线复核</b></td><td>0.5 天</td><td>基线数据表</td><td><code>h3turing doctor</code> 全绿；<code>h3turing bench --a t2v-final --b i2v-final</code> 跑出本机当次基线（用于对比后续优化）</td></tr>
+<tr><td><b>M1 · 渲染层封装</b></td><td>1 天</td><td><code>render.py</code></td><td>给定 <code>shots.json</code> + 参考图，产出 3 镜 clips；单镜失败重试生效；中途 kill 后能续跑</td></tr>
+<tr><td><b>M2 · 剧本层</b></td><td>1–1.5 天</td><td><code>llm.py</code> + <code>story.py</code> + <code>shots.py</code> + prompts/</td><td>10 个题材各生成 1 份 story.json，<b>≥8 份 schema 合法</b>且镜头数/时长正确；本地 LLM 与云兜底两条路都验证过</td></tr>
+<tr><td><b>M3 · 角色一致性</b></td><td>1 天</td><td><code>cast.py</code></td><td>定妆图 2–4 候选自动挑选流程跑通；3 镜人脸/服装一致（人工确认）</td></tr>
+<tr><td><b>M4 · 后期合成</b></td><td>1 天</td><td><code>assemble.py</code></td><td>3 镜 → 1 条 1920×1056 / 24fps / 带字幕 / 不削波的 MP4；音画不错位</td></tr>
+<tr><td><b>M5 · 编排与调度</b></td><td>1–1.5 天</td><td><code>job.py</code> + <code>gate.py</code> + <code>sd</code> CLI + pi skill</td><td><code>sd run --brief "…"</code> 一条命令出片；显存门控生效（人为占住显存时能正确拒绝并提示）</td></tr>
+<tr><td><b>M6 · 质检与批量</b></td><td>1 天</td><td><code>qc.py</code> + <code>sd batch</code></td><td>质检能检出黑帧/静音/削波/缺镜；批量 5 集连续跑完不崩</td></tr>
+<tr><td><b>P2（可选）· 本地配音</b></td><td>2–3 天</td><td>TTS 接入 + 对轨</td><td>台词转语音并与画面时间轴对齐；需先选定 TTS 底模并解决显存窗口</td></tr>
+</tbody>
+</table>
+<div class="box tip">
+<b>合计：M0–M6 ≈ 7–8.5 人日</b>（不含审片与内容调优）。第一个端到端成片在 <b>M4 结束</b>（约 4.5 天）就能看到；<b>M5 之前都是"手动串脚本"，这是刻意安排的</b>——先证明链路通，再做自动化。
+</div>
+</section>
+
+<!-- ================= 13 ================= -->
+<section id="risk">
+<h2>13 · 风险登记册</h2>
+<table>
+<thead><tr><th>#</th><th>风险</th><th>影响</th><th>触发信号</th><th>对策</th></tr></thead>
+<tbody>
+<tr><td>R1</td><td>本地 Q2 27B 剧本质量不够</td><td>剧本层返工</td><td>M2 验收 &lt; 8/10 合法</td><td>抽象层已内置云兜底；提示词模板按已验证句式约束；必要时用 NInfer 27B（质量更高）替代 llama.cpp</td></tr>
+<tr><td>R2</td><td>显存冲突（LLM 与 H3 抢卡）</td><td>OOM / 黑屏</td><td><code>nvidia-smi</code> 常驻 &gt; 8GB 却要渲染</td><td>门控强制；渲染期间禁起 LLM；<code>--reserve-vram 2.5</code> 不动</td></tr>
+<tr><td>R3</td><td>跨镜人物崩脸</td><td>返工重拍</td><td>人工抽检发现不同人</td><td>定妆图一步多花 2 分钟挑图；ref2va 双参考图；草稿档先看脸再进成片</td></tr>
+<tr><td>R4</td><td>H3 音轨与帧数绑定</td><td>成片时长不对</td><td>音轨比画面短</td><td>锁 124 帧 = 5.2s 的镜长；需要更长音轨的镜头原生生成更多帧；RIFE 只用于同长度提流畅</td></tr>
+<tr><td>R5</td><td>ComfyUI 无鉴权被局域网投毒</td><td>队列被塞任务 / 产物被读</td><td><code>/queue</code> 出现陌生任务</td><td>生产模式绑 <code>127.0.0.1</code> 或 tailscale IP；对外部只开只读静态服务</td></tr>
+<tr><td>R6</td><td>单镜失败率上升（长时间连续渲染）</td><td>一集拖长</td><td>失败 &gt; 1/镜</td><td>每镜 3 次重试且换 seed；连续失败 3 镜则暂停任务并告警（多半是显存/温度问题）</td></tr>
+<tr><td>R7</td><td>杀毒/大文件下载抢占 IO，模型加载从 1 分钟变 28 分钟</td><td>吞吐塌方</td><td>冷启动 &gt; 120s</td><td>渲染时段不做下载/解压；杀软实时防护在渲染期临时关闭（渲染后恢复）</td></tr>
+<tr><td>R8</td><td>长片段（≥15s）触发 TDR 黑屏</td><td>整机显示黑</td><td>长片渲染时黑屏</td><td>长片把 <code>--reserve-vram</code> 提到 4；首版只做 5.2s 镜（124 帧）</td></tr>
+<tr><td>R9</td><td>磁盘被中间产物吃满</td><td>渲染失败</td><td>可用 &lt; 50GB</td><td>每集产物 ≤ 300MB；保留最近 20 集，其余自动清理；下载前查空间</td></tr>
+<tr><td>R10</td><td>prompt_id 静默去重导致"任务消失"</td><td>调试抓瞎</td><td>提交后 history 里没有记录</td><td>每镜 seed 唯一；用 <code>bump_seed()</code>；带唯一 <code>client_id</code></td></tr>
+<tr><td>R11</td><td>直营内容合规（题材/肖像/配音授权）</td><td>下架/法务</td><td>—</td><td>题材库白名单；<b>首版一律用虚构角色、不使用真人肖像</b>；台词走字幕或授权 TTS</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 14 ================= -->
+<section id="ops">
+<h2>14 · 运维与监控</h2>
+
+<h3>14.1 需要盯的指标</h3>
+<table>
+<thead><tr><th>指标</th><th>来源</th><th>阈值 / 动作</th></tr></thead>
+<tbody>
+<tr><td>GPU 温度 / 功耗</td><td><code>nvidia-smi</code></td><td>&gt; 85°C 暂停并检查机箱散热（本机风扇 3–5 号位未接）</td></tr>
+<tr><td>显存占用</td><td><code>nvidia-smi</code></td><td>渲染期间 &gt; 21.5GB 立即停止新任务</td></tr>
+<tr><td>单镜耗时</td><td><code>timing.json</code></td><td>热态 &gt; 260s 说明降频/资源争抢，告警</td></tr>
+<tr><td>冷启动耗时</td><td><code>timing.json</code></td><td>&gt; 120s 检查杀软/IO（R7）</td></tr>
+<tr><td>单镜失败率</td><td><code>report.json</code></td><td>&gt; 20% 暂停任务</td></tr>
+<tr><td>ComfyUI 队列深度</td><td><code>GET /queue</code></td><td>&gt; 3 说明有外部任务在抢卡</td></tr>
+<tr><td>磁盘可用</td><td><code>df</code></td><td>&lt; 50GB 触发清理</td></tr>
+</tbody>
+</table>
+
+<h3>14.2 日常操作（运维三条命令）</h3>
+<pre><code># 1) 看 ComfyUI 是否活着 + 队列
+curl -s http://127.0.0.1:8188/queue | head -c 400
+
+# 2) 看 GPU（温度/显存/占用进程）
+nvidia-smi --query-gpu=name,temperature.gpu,memory.used,memory.total,utilization.gpu --format=csv
+
+# 3) 看本机 LLM 是否在占显存
+nvidia-smi --query-compute-apps=pid,used_memory --format=csv</code></pre>
+
+<h3>14.3 生产模式开关（上线前必须改）</h3>
+<pre><code># ComfyUI：改成只监听本机或 tailscale（默认 0.0.0.0 = 局域网裸奔）
+H3_LISTEN=127.0.0.1 bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.local.sh
+# 或 H3_LISTEN=100.69.133.37   # 只走 tailscale</code></pre>
+</section>
+
+<!-- ================= 15 ================= -->
+<section id="appendix">
+<h2>15 · 附录</h2>
+
+<h3>15.1 命令速查</h3>
+<table>
+<thead><tr><th>用途</th><th>命令</th></tr></thead>
+<tbody>
+<tr><td>启动 ComfyUI（本机防黑屏参数）</td><td class="mono">bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.local.sh</td></tr>
+<tr><td>开工自检</td><td class="mono">h3turing doctor</td></tr>
+<tr><td>单镜试片（最快验证）</td><td class="mono">h3turing demo --prompt "…" --tier t2v-final</td></tr>
+<tr><td>图生视频试片</td><td class="mono">h3turing demo --image cast/c1.png --prompt "…" --tier i2v-final</td></tr>
+<tr><td>同 seed A/B 对比</td><td class="mono">h3turing bench --a t2v-final --b t2v-pddacc4 --seed 3013</td></tr>
+<tr><td>现有多镜拼接（手动）</td><td class="mono">python3 /home/a/ai-work/minimax-h3-turing/scripts/shortvideo.py --character cast/c1.png --shots shots.json --out out.mp4</td></tr>
+<tr><td>1080p 交付上采样</td><td class="mono">python3 /home/a/ai-work/minimax-h3-turing/scripts/upscale_video.py in.mp4 out.mp4 --scale 3</td></tr>
+<tr><td>本地 LLM（剧本）</td><td class="mono">curl http://127.0.0.1:8080/v1/chat/completions -d @req.json</td></tr>
+<tr><td>pi 无头编排</td><td class="mono">pi --print --model llama-local:qwen38-27b-lynstyle "…"</td></tr>
+</tbody>
+</table>
+
+<h3>15.2 路径速查</h3>
+<table>
+<thead><tr><th>用途</th><th>路径</th></tr></thead>
+<tbody>
+<tr><td>工作根目录</td><td class="mono">/home/a/ai-work/</td></tr>
+<tr><td>ComfyUI</td><td class="mono">/home/a/ai-work/ComfyUI</td></tr>
+<tr><td>H3 手册与工具库</td><td class="mono">/home/a/ai-work/minimax-h3-turing</td></tr>
+<tr><td>模型权重</td><td class="mono">/home/a/ai-work/models/</td></tr>
+<tr><td>本地 LLM 权重</td><td class="mono">/home/a/ai-work/models/llm/</td></tr>
+<tr><td>渲染产物</td><td class="mono">/home/a/ai-work/ComfyUI/output/</td></tr>
+<tr><td>平台代码（新建）</td><td class="mono">/home/a/ai-work/workspace/shortdrama/</td></tr>
+<tr><td>既有文档仓库</td><td class="mono">/home/a/ai-work/ai-2080ti22g/</td></tr>
+<tr><td>设备信息</td><td class="mono">/home/a/ai-work/system-info.md</td></tr>
+</tbody>
+</table>
+
+<h3>15.3 端口速查</h3>
+<table>
+<thead><tr><th>端口</th><th>服务</th><th>是否本方案使用</th></tr></thead>
+<tbody>
+<tr><td>8188</td><td>ComfyUI</td><td><span class="tag ok">核心</span>渲染执行体</td></tr>
+<tr><td>8080</td><td>llama.cpp（Qwen3.8-27B Q2）</td><td><span class="tag ok">核心</span>剧本</td></tr>
+<tr><td>8082</td><td>NInfer 27B</td><td><span class="tag mid">备选</span>剧本质量更高时</td></tr>
+<tr><td>8100</td><td>vLLM 9B FP8</td><td><span class="tag mid">备选</span>并发/长文档</td></tr>
+<tr><td>8090</td><td>静态文档服务</td><td><span class="tag gray">复用</span>发布本方案 HTML</td></tr>
+<tr><td>100.69.133.37</td><td>Tailscale 地址</td><td><span class="tag gray">安全</span>ComfyUI 收紧监听用</td></tr>
+</tbody>
+</table>
+
+<h3>15.4 术语速查</h3>
+<table>
+<thead><tr><th>词</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td>W4A8</td><td>权重 4bit / 激活 8bit 量化。sm_75 上唯一可用的视频推理形态</td></tr>
+<tr><td>bypass LoRA</td><td>运行时挂 LoRA，而不是把 LoRA merge 进权重。快 29%，同 seed 可复现</td></tr>
+<tr><td>Ref2VA</td><td>H3 的参考图路线，提示词里用 <code>&lt;Picture 1&gt;</code> 引用参考图，人物一致性最强</td></tr>
+<tr><td>i2v</td><td>图生视频，用首帧锚定画面</td></tr>
+<tr><td>PDD</td><td>Progressive Distillation，8 步出片且可复现；PDD+T8 是草稿极速档</td></tr>
+<tr><td>T8 / FBC / TeaCache</td><td>各类 step/block 缓存加速。<b>命中即 fork 轨迹 → 只用于草稿</b></td></tr>
+<tr><td>concat demuxer</td><td>ffmpeg 不重编码拼接（<code>-c copy</code>），音轨逐样本不变</td></tr>
+<tr><td>门控 gate</td><td>调度层在阶段切换前强制检查显存/队列是否干净</td></tr>
+</tbody>
+</table>
+
+<h3>15.5 数字可信度约定</h3>
+<div class="box info">
+<b>【实测】</b>= 本机真权重、真硬件跑出来的数字（可复现）。<b>【推算】</b>= 基于实测单镜耗时乘算出来的，未端到端验证，<b>不得当结论引用</b>。<b>【来自手册】</b>= 引自 <code>minimax-h3-turing</code> 手册的实测记录（同样为本机，2026-09~11）。<br>
+本方案里所有"产能"数字都是【推算】，请在 M6 拿到真实批量数据后回填本表。
+</div>
+
+<h3>15.6 立刻可做的三件事（今天就能开工）</h3>
+<ol>
+<li>跑一次 <code>h3turing doctor</code> + <code>h3turing bench --a t2v-final --b i2v-final</code>，把当次基线写进 <code>jobs/</code>（M0）。</li>
+<li>用现有 <code>scripts/shortvideo.py</code> + 已有 <code>cast</code> 图，手动再串一集 6 镜，把后期（字幕/音量/上采样）先手工做一遍 —— <b>这一步会暴露 80% 的真实问题</b>。</li>
+<li>让本地 LLM 写 3 个题材的 <code>story.json</code>，人工评估质量 —— 这决定 R1（剧本质量）是真风险还是假风险。</li>
+</ol>
+</section>
+
+<footer>
+自动化短剧 / 短视频平台建设方案 · 生成于 2026-11-02 · 适用机器：X99 + RTX 2080 Ti 22GB（sm_75）· 底座：pi-agent + ComfyUI v0.33.1 + MiniMax-H3 W4A8 + Z-Image-Turbo
+</footer>
+</main>
+</div>
+</body>
+</html>

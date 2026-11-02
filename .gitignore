@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+# 任务产物（每集 ≤300MB，不入库）
+jobs/*
+!jobs/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# 成片与中间产物
+*.mp4
+*.png
+*.jpg
