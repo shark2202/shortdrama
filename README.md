@@ -10,10 +10,11 @@
 
 | 目录 | 内容 |
 |---|---|
-| `docs/` | 建设方案 HTML（设计权威源） |
-| `shortdrama/` | 主代码包：`llm.py` `story.py` `cast.py` `shots.py` `render.py` `assemble.py` `qc.py` `job.py` `gate.py` `config.py` `assets.py` |
-| `prompts/` | 提示词模板（剧本 / 分镜 / 字幕） |
-| `jobs/` | 任务目录，一集一个子目录（`job.json` / `story.json` / `shots.json` / `cast/` / `clips/` / `episode.mp4` / `report.json` / `timing.json`） |
+| `docs/` | 建设方案 HTML（设计权威源）+ `SOP-短剧生产.md`（实操 SOP） |
+| `shortdrama/` | 主代码包：`episode.py`（一集六阶段驱动）`assets.py`（产物清单/静态页） |
+| `prompts/` | 提示词模板（剧本 schema / 定妆出图） |
+| `skills/` | pi-agent skill：`shortdrama-production/SKILL.md`（已软链到 `~/.pi/agent/skills/`） |
+| `jobs/` | 任务目录，一集一个子目录（`story.json` / `shots.json` / `cast/` / `clips/` / `episode.mp4` / `report.json`） |
 | `logs/` | 运行日志 |
 
 ## 复用（不重复造轮子）
@@ -52,6 +53,27 @@ bash ../minimax-h3-turing/scripts/h3_launch.local.sh
 curl -s http://127.0.0.1:8188/queue | head -c 400
 nvidia-smi --query-gpu=name,temperature.gpu,memory.used,memory.total,utilization.gpu --format=csv
 ```
+
+## 跑一集（已实践：D202611_001）
+
+一集 = 一个目录（目录即状态）。六阶段都能单独重跑，渲染是**单镜粒度**续跑。
+
+```bash
+EP=/home/a/ai-work/duanju/D202611_001
+EPY=/home/a/ai-work/.venv/bin/python
+SCRIPT=workspace/shortdrama/shortdrama/episode.py
+
+$EPY $SCRIPT $EP cast      # 定妆候选图（Z-Image 中文 t2i，约 10s/张）
+#   ↓ agent 看图挑人 → 写 $EP/cast/selection.json
+$EPY $SCRIPT $EP pick      # → cast/<id>.png（主）+ <id>_alt.png（备）
+$EPY $SCRIPT $EP shots     # story.json → shots.json（自动加 <Picture 1> 前缀）
+$EPY $SCRIPT $EP render    # 逐镜出镜（H3 ref2va，约 200s/镜）
+$EPY $SCRIPT $EP assemble  # 拼接 → 3x 放大 → 烧字幕 + 统一响度 → episode.mp4
+$EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → report.json
+```
+
+- 剧本由 **pi-agent** 按 `prompts/story.md` 写（不用本地 LLM 服务，省掉一整套起停与解析）。
+- 详细步骤与踩坑：`docs/SOP-短剧生产.md`；agent 用法：`skills/shortdrama-production/SKILL.md`。
 
 ## 静态服务（方案文档）
 
