@@ -369,6 +369,7 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 <tr><td>D8</td><td>编排用 pi-agent，不自造 agent 框架</td><td>pi 已配 5 个 provider、装好 skills / subagents / workflows 扩展；<code>pi --print</code> 可无头驱动</td><td>自建 LLM 调用循环</td></tr>
 <tr><td>D9</td><td>交付形态 = CLI + 任务目录，不做 Web 后台</td><td>单人单机产线；pi-agent 的 TUI 已经能当"操作界面"</td><td>Web 控制台、账号体系</td></tr>
 <tr><td>D10</td><td>1080p 交付用重采样，不用 ML 超分</td><td>本机无放大模型权重，<code>nvidia-vfx</code> 需 TensorRT 装不上，静态 ffmpeg 无 CUDA 滤镜</td><td>真超分清晰度</td></tr>
+<tr><td>D11</td><td>资产可见性 = 只读静态页（清单 JSON + 生成的 HTML），不做资产数据库 / 写操作后台</td><td>D9 的延伸：产物天然在文件系统里，再引入数据库就会出现"第二个真相源"，与 §8.3「文件即状态、断点续跑靠目录」冲突；审片 / 挑图的选择写回 job 目录里的文件即可</td><td>资产标签 / 检索 / 多端同步</td></tr>
 </tbody>
 </table>
 </section>
@@ -395,10 +396,11 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 │   ├── qc.py                 # P6：自动质检 → report.json
 │   ├── job.py                # 任务目录、状态机、断点续跑、重试
 │   ├── gate.py               # 显存门控（等 ComfyUI 空闲、LLM 腾空显存）
-│   └── config.py             # 唯一配置文件（路径、档位、端口、超时）
+│   ├── config.py             # 唯一配置文件（路径、档位、端口、超时）
+│   └── assets.py             # 资产清单 + 只读静态页（已有）
 ├── prompts/                  # 提示词模板（剧本 / 分镜 / 字幕）
 ├── jobs/                     # 任务目录（每个一集一个子目录）
-└── logs/</code></pre>
+└── logs/
 
 <h3>7.2 复用关系（不重复造轮子）</h3>
 <table>

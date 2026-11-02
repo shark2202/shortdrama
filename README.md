@@ -11,7 +11,7 @@
 | 目录 | 内容 |
 |---|---|
 | `docs/` | 建设方案 HTML（设计权威源） |
-| `shortdrama/` | 主代码包：`llm.py` `story.py` `cast.py` `shots.py` `render.py` `assemble.py` `qc.py` `job.py` `gate.py` `config.py` |
+| `shortdrama/` | 主代码包：`llm.py` `story.py` `cast.py` `shots.py` `render.py` `assemble.py` `qc.py` `job.py` `gate.py` `config.py` `assets.py` |
 | `prompts/` | 提示词模板（剧本 / 分镜 / 字幕） |
 | `jobs/` | 任务目录，一集一个子目录（`job.json` / `story.json` / `shots.json` / `cast/` / `clips/` / `episode.mp4` / `report.json` / `timing.json`） |
 | `logs/` | 运行日志 |
@@ -56,9 +56,25 @@ nvidia-smi --query-gpu=name,temperature.gpu,memory.used,memory.total,utilization
 ## 静态服务（方案文档）
 
 ```bash
-```bash
 bash docs/serve.sh          # → http://<本机IP>:8091/
 PORT=8092 bash docs/serve.sh
 ```
 
 8090 端口是 `ai-2080ti22g/docs/serve.sh`，那份服务也覆盖本方案（旧 URL 仍可用）。
+
+## 资产可见性（已实现）
+
+产物在文件系统里，**不引入数据库**（方案 D9/D11：文件即状态，避免第二个真相源）。给的是"只读视图"：
+
+```bash
+./sd assets ls                  # 终端列出产物（含 sha256 / 体积 / 时间）
+./sd assets json --out a.json   # 机器可读清单
+./sd assets html                # 生成只读静态页（默认 <root>/_assets.html）
+./sd assets serve --port 8092   # 生成 + 起本地服务 → http://127.0.0.1:8092/_assets.html
+```
+
+- 默认根目录 `../ComfyUI/output`；也可指向某个 `jobs/<job-id>/`
+- 产物旁挂 `<file>.json`（sidecar）时，页面直接显示该次运行的 seed / tier / 耗时
+- **页面不写任何东西**：挑图、审片的选择仍写回 job 目录里的文件
+
+测试：`python3 -m unittest discover -s shortdrama/tests`

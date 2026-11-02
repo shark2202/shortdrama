@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""sd - 短剧平台主 CLI（薄编排层的入口）。
+
+当前可用子命令：
+  sd assets ls   [DIR]            列出产物清单（终端）
+  sd assets json [DIR]            输出机器可读清单 JSON
+  sd assets html [DIR]            生成只读静态页（给人看产物）
+  sd assets serve [DIR] [PORT]    生成静态页并本地起服务
+
+DIR 默认 ../ComfyUI/output（相对本脚本），也就是本机渲染产物的落地目录。
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from shortdrama import assets  # noqa: E402
+
+DEFAULT_DIR = assets.DEFAULT_ROOT
+
+
+def _resolve(d: str | None) -> Path:
+    return Path(d).expanduser().resolve() if d else DEFAULT_DIR
+
+
+def cmd_ls(args) -> int:
+    root = _resolve(args.dir)
+    items = assets.scan(root, hash_all=args.hash)
+    if not items:
+        print(f"（{root} 下没有产物）")
+        return 0
+    print(f"{root}  共 {len(items)} 个")
+    for a in items:
+        h = "sha256" if a.sha256 else "-"
+        print(f"  {a.kind:<5} {a.size:>12,}  {h:<6}  {a.path}")
+    return 0
+
+
+def cmd_json(args) -> int:
+    root = _resolve(args.dir)
+    data = assets.inventory(root, hash_all=args.hash)
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    if args.out:
+        Path(args.out).write_text(text + "\n", encoding="utf-8")
+        print(f"已写 {args.out}（{data['count']} 个产物）")
+    else:
+        print(text)
+    return 0
+
+
+def cmd_html(args) -> int:
+    root = _resolve(args.dir)
+    out = assets.write_html(root, out=args.out, hash_all=args.hash, title=args.title)
+    print(f"已写 {out}")
+    print(f"查看： cd {root} && python3 -m http.server {args.port} --bind {args.bind}")
+    return 0
+
+
+def cmd_serve(args) -> int:
+    root = _resolve(args.dir)
+    assets.write_html(root, out=args.out, hash_all=args.hash, title=args.title)
+    print(f"静态页已生成，服务根目录：{root}")
+    print(f"→ http://{args.bind}:{args.port}/_assets.html")
+    subprocess.run([sys.executable, "-m", "http.server", str(args.port),
+                    "--bind", args.bind], cwd=root)
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = __import__("argparse").ArgumentParser(prog="sd", description="短剧平台 CLI")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    a = sub.add_parser("assets", help="产物资产清单")
+    asub = a.add_subparsers(dest="acmd", required=True)
+
+    def common(p):
+        p.add_argument("dir", nargs="?", help="产物根目录（默认 ../ComfyUI/output）")
+        p.add_argument("--hash", action="store_true", help="强制算全部 sha256（大文件慢）")
+        return p
+
+    p = common(asub.add_parser("ls", help="终端列出"))
+    p.set_defaults(fn=cmd_ls)
+    p = common(asub.add_parser("json", help="输出 JSON 清单"))
+    p.add_argument("--out", help="写入文件（默认打到 stdout）")
+    p.set_defaults(fn=cmd_json)
+    p = common(asub.add_parser("html", help="生成只读静态页"))
+    p.add_argument("--out", help="输出文件（默认 <root>/_assets.html）")
+    p.add_argument("--title", default="资产清单")
+    p.add_argument("--port", type=int, default=8092)
+    p.add_argument("--bind", default="127.0.0.1")
+    p.set_defaults(fn=cmd_html)
+    p = common(asub.add_parser("serve", help="生成静态页并起本地服务"))
+    p.add_argument("--out", help="输出文件（默认 <root>/_assets.html）")
+    p.add_argument("--title", default="资产清单")
+    p.add_argument("--port", type=int, default=8092)
+    p.add_argument("--bind", default="127.0.0.1")
+    p.set_defaults(fn=cmd_serve)
+
+    args = ap.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
