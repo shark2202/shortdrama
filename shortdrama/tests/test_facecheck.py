@@ -18,11 +18,29 @@ class CheckTest(unittest.TestCase):
         self.assertIn("脸型", joined)
 
     def test_good_description_passes(self) -> None:
-        # 大纲里 c1 的实际描述
-        desc = ("长脸，颧骨微突，下颌线偏硬。深棕发尾挑极细银丝，刘海不对称——左到眉右到额，"
-                "发际线略高。眼下淡青色细纹。蓝色便利店制服，袖子卷过肘，挂绳工牌歪在左胸，"
-                "左手腕旧疤创可贴边缘总翘，口袋露出半截圆珠笔。")
-        self.assertEqual(facecheck.check(desc), [])
+        # 大纲里 c1 的实际描述（身份 + 造型分开）
+        ch = {
+            "id": "c1", "name": "林晚",
+            "identity_cn": "亚洲女性，24岁",
+            "desc_cn": ("长脸，颧骨微突，下颌线偏硬。深棕发尾挑极细银丝，刘海不对称——左到眉右到额，"
+                        "发际线略高。眼下淡青色细纹。蓝色便利店制服，袖子卷过肘，挂绳工牌歪在左胸，"
+                        "左手腕旧疤创可贴边缘总翘，口袋露出半截圆珠笔。"),
+        }
+        self.assertEqual(facecheck.check_character(ch), [])
+
+    def test_missing_identity_is_reported(self) -> None:
+        # 实测教训：不给性别/年龄，Z-Image 默认出男性
+        ch = {"id": "c1", "desc_cn": ("长脸，颧骨微突，下颌线偏硬。深棕发尾挑极细银丝，"
+                                    "刘海不对称。眼下淡青色细纹。蓝色便利店制服，挂绳工牌。")}
+        joined = " ".join(facecheck.check_character(ch))
+        self.assertIn("identity_cn", joined)
+
+    def test_cast_prompt_joins_identity_and_style(self) -> None:
+        ch = {"identity_cn": "亚洲女性，24岁", "desc_cn": "长脸，短发"}
+        story = {"cast_prompt_cn": "人物定妆照，中性柔光，纯灰背景"}
+        p = facecheck.cast_prompt(ch, story)
+        self.assertIn("亚洲女性，24岁", p)
+        self.assertIn("中性柔光", p)
 
     def test_missing_dimensions_each_reported(self) -> None:
         cases = {

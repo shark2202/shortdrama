@@ -142,12 +142,11 @@ def stage_cast(job: Path, n: int = CANDIDATES) -> None:
     index = {}
     for ch in story["characters"]:
         cid = ch["id"]
-        # 定妆图**不能**混入 style_cn：风格词（霓虹洋红/低照度/胶片颗粒）会覆盖
+        # 定妆图提示词 = 身份锚点 + 造型 + 定妆后缀。
+        # **不能**混入 style_cn：风格词（霓虹洋红/低照度/胶片颗粒）会覆盖
         # cast_prompt_cn 里的"中性柔光、纯灰背景"，模型顺势出美颜网红脸，
         # 而且带色光污染 ref2va 的参考图。定妆图要的是干净中性光。
-        prompt = "，".join(p.strip("，。 ") for p in
-                          (ch.get("desc_cn", ""), story.get("cast_prompt_cn", ""))
-                          if p.strip())
+        prompt = facecheck.cast_prompt(ch, story)
         cands = []
         for k in range(1, n + 1):
             graph = copy.deepcopy(template)
@@ -178,19 +177,42 @@ def stage_cast(job: Path, n: int = CANDIDATES) -> None:
 
 
 def stage_pick(job: Path) -> None:
-    """把选中的候选落地成主图/备图。"""
+    """把选中的候选落地成主图/备图。
+
+    **备图必须是主图的 i2i 派生**（同一张脸），不能直接用另一张 t2i 候选——
+    不同 seed 出的是不同的人，而 ref2va 的 <Picture 2> 要求"同一个角色的另一张"，
+    用错人脸 = 跨镜崩脸（方案 R3）。方案 §9.2 写的就是：主图 + i2i(denoise 0.6-0.75) 派生。
+    """
     sel_file = job / "cast" / "selection.json"
     if not sel_file.exists():
         raise SystemExit(f"缺少 {sel_file}")
+    client = comfy()
+    i2i = load(WORKFLOWS / "zimage_turbo_i2i_api.json")
     for cid, pick in load(sel_file).items():
         main = job / "cast" / f"{cid}_{pick['main']}.png"
-        alt = job / "cast" / f"{cid}_{pick.get('alt') or pick['main']}.png"
         if not main.exists():
             raise SystemExit(f"找不到 {main}")
         shutil.copyfile(main, job / "cast" / f"{cid}.png")
-        shutil.copyfile(alt, job / "cast" / f"{cid}_alt.png")
-        print(f"[pick] {cid}: main={main.name} alt={alt.name}")
-
+        alt_dest = job / "cast" / f"{cid}_alt.png"
+        if alt_dest.exists():
+            print(f"[pick] {cid}: alt 已存在，跳过", flush=True)
+            continue
+        # 从主图派生备图：上传主图 → i2i → 存回 alt
+        ref = client.upload_image(job / "cast" / f"{cid}.png")
+        graph = copy.deepcopy(i2i)
+        for node in graph.values():
+            ins = node.get("inputs", {})
+            if ins.get("image") == "__IMAGE__":
+                ins["image"] = ref
+            if "seed" in ins:
+                ins["seed"] = SEED + 100
+            if "denoise" in ins:
+                ins["denoise"] = 0.65
+        files = collect(client.render(graph, max_s=900))
+        if not files:
+            raise SystemExit(f"{cid} 备图（i2i 派生）没有产物")
+        client.download(files[0], alt_dest)
+        print(f"[pick] {cid}: main={main.name} alt=i2i 派生", flush=True)
 
 def build_shots(story: dict) -> list[dict]:
     """story.json 的场景 → H3 提示词（句式固定：实测出片的句式，别让模型自由发挥）。
