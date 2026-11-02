@@ -56,6 +56,9 @@ nvidia-smi --query-gpu=name,temperature.gpu,memory.used,memory.total,utilization
 ## 静态服务（方案文档）
 
 ```bash
-bash docs/serve.sh          # → http://<本机IP>:8090/
-PORT=8091 bash docs/serve.sh
+```bash
+bash docs/serve.sh          # → http://<本机IP>:8091/
+PORT=8092 bash docs/serve.sh
 ```
+
+8090 端口是 `ai-2080ti22g/docs/serve.sh`，那份服务也覆盖本方案（旧 URL 仍可用）。
