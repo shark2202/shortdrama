@@ -64,6 +64,13 @@ def fix_story(base: str, model: str, story_path: Path) -> int:
         if "subtitle_cn" in fix:
             s["subtitle_cn"] = fix["subtitle_cn"]
         n += 1
+    # 确定性兜底：LLM 改写后仍要求可读文字的，直接在 prompt 末尾补"不可辨认"。
+    # 模型改写不可靠（会把 printed date 换成另一种说法），这里用规则兜住。
+    for s in story["scenes"]:
+        if textcheck.check_shot(s):
+            s["prompt_en"] = s.get("prompt_en", "").rstrip(",. ") + \
+                ", any text in frame is too small and blurred to read"
+            n += 1
     story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     left = textcheck.check_story(story)
     print(f"    改了 {n} 镜，剩余问题 {len(left)}")

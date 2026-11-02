@@ -13,14 +13,21 @@ from __future__ import annotations
 
 import re
 
-# prompt_en / beat 里出现这些 = 画面里有需要读懂的文字
 TEXT_MARKERS = [
-    r"\bdate\b", r"\bdated\b", r"\btimestamp\b", r"\bclock reads\b",
-    r"\bthe text reads\b", r"\bhandwritten\b", r"\bhandwriting\b", r"\bwritten\b",
-    r"\bwriting on\b", r"\bsign says\b", r"\bsignage\b", r"\bneon sign\b",
-    r"\bposter\b", r"\bprinted\b", r"\blabel reads\b", r"\bwords\b", r"\bletters\b",
-    r"\bnumbers\b", r"\bdigits\b", r"\bthe date\b", r"\bcaption\b", r"\btitle card\b",
-    r"\bopen on the text\b", r"\bdisplaying\b", r"\bscreen shows\b", r"\bmonitor shows\b",
+    r"\bprinted date\b", r"\bdate stamp\b", r"\bthe date\b", r"\ba date\b",
+    r"\bdated\b", r"\btimestamp\b", r"\btimecode\b", r"\bclock reads\b",
+    r"\bthe text reads\b", r"\btext reads\b", r"\bhandwritten\b", r"\bhandwriting\b",
+    r"\bhand-written\b", r"\bsign says\b", r"\bsign reads\b", r"\bwriting reads\b",
+    r"\bthe writing\b", r"\bwords on\b", r"\btext on\b", r"\bdisplaying\b",
+    r"\bshows a timestamp\b", r"\bcaption\b", r"\btitle card\b", r"\bneon letters\b",
+]
+
+# 明确说"不可辨认/没有字" = 安全
+SAFE_MARKERS = [
+    "illegible", "unreadable", "blurred handwriting", "blurred text", "blurred writing",
+    "out of focus", "too small to read", "cannot be read", "can not be read",
+    "indistinct", "smudged", "no words", "without text", "without any text",
+    "nothing written", "obscured by", "hidden by", "washed out by", "torn away",
 ]
 
 # 明确说了"不可辨认/模糊" = 安全
