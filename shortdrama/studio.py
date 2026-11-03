@@ -25,6 +25,7 @@ import mimetypes
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 import urllib.parse
@@ -95,6 +96,14 @@ def episode_state(job: Path) -> dict:
     st["stage"] = ("未开渲" if not shots else
                    "渲染中" if len(clips) < len(shots) else
                    "已出镜" if not (job / "episode.mp4").exists() else "已成片")
+    # 画幅：审片时要能一眼分清横屏版 / 竖屏版（缩略图比例也不同）
+    story_file = job / "story.json"
+    st["aspect"] = "landscape"
+    if story_file.exists():
+        try:
+            st["aspect"] = json.loads(story_file.read_text(encoding="utf-8")).get("aspect", "landscape")
+        except ValueError:
+            pass
 
     # 定妆候选（剧集级共享目录，或本集内）
     cast_dir = job / "cast"
@@ -205,9 +214,23 @@ def write_review(job: Path, data: dict) -> Path:
 class Handler(BaseHTTPRequestHandler):
     root: Path = Path(".")
     series: str = "D202611_001"
+    token: str = ""            # 写操作要带令牌（局域网开放时防误写/乱写）
 
     def log_message(self, fmt, *args):        # 别刷屏
         pass
+
+    def _authorized(self) -> bool:
+        """写操作必须带对令牌。读操作在局域网开放（自己的片子自己看）。
+
+        为什么写操作要令牌：局域网里任何设备都能 POST，而「重出」会**删 clip**。
+        """
+        if not self.token:
+            return True
+        got = self.headers.get("X-Studio-Token", "")
+        if not got:
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            got = (q.get("k") or [""])[0]
+        return got == self.token
 
     def _send(self, code: int, body: bytes, ctype: str = "application/json; charset=utf-8"):
         self.send_response(code)
@@ -281,6 +304,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         p = urllib.parse.urlparse(self.path)
+        if not self._authorized():
+            self._json({"error": "令牌不对，写操作被拒"}, 403)
+            return
         length = int(self.headers.get("Content-Length", 0))
         try:
             data = json.loads(self.rfile.read(length) or b"{}")
@@ -314,14 +340,44 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(root: Path, series: str = "D202611_001", host: str = "127.0.0.1",
-          port: int = 8095) -> None:
+          port: int = 8095, token: str = "") -> str:
+    """起审片台。局域网开放时返回带令牌的 URL（写操作需要令牌）。"""
+    import secrets
+    token = token or secrets.token_urlsafe(6)
+    # 重定向到文件时 stdout 是块缓冲 → 令牌会卡在缓冲区里打不出来，必须 flush
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     Handler.root = Path(root).resolve()
     Handler.series = series
+    Handler.token = token if host not in ("127.0.0.1", "localhost") else ""
     srv = ThreadingHTTPServer((host, port), Handler)
-    print(f"[studio] http://{host}:{port}/  （根目录 {Handler.root}）")
+    url = f"http://{host}:{port}/"
+    if Handler.token:
+        url += f"?k={Handler.token}"
+    print(f"[studio] 本机   http://127.0.0.1:{port}/")
+    if host not in ("127.0.0.1", "localhost"):
+        for ip in _lan_ips():
+            print(f"[studio] 局域网 http://{ip}:{port}/?k={Handler.token}")
+    print(f"[studio] 根目录 {Handler.root}")
     print("[studio] 选图 → cast/selection.json；逐镜通过/重出 → review.json（重出会删 clip，下次 render 只重出该镜）")
+    if Handler.token:
+        print("[studio] 写操作需要令牌（?k=… 或 X-Studio-Token 头）")
     print("[studio] Ctrl-C 退出")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\n[studio] 已退出")
+    return url
+
+
+def _lan_ips() -> list[str]:
+    out = []
+    try:
+        import subprocess
+        r = subprocess.run(["hostname", "-I"], capture_output=True, text=True)
+        out = [x for x in r.stdout.split() if not x.startswith("127.")]
+    except Exception:
+        pass
+    return out

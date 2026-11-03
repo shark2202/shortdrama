@@ -88,7 +88,7 @@ def cmd_studio(args) -> int:
             if ep.get("report"):
                 print(f"    质检阻断 {ep['report']['blocking']} 项")
         return 0
-    studio.serve(root, args.series, args.host, args.port)
+    studio.serve(root, args.series, args.host, args.port, args.token)
     return 0
 
 
@@ -125,7 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("studio", help="审片 Web 界面（选图 / 逐镜审片 / 成片）")
     p.add_argument("dir", nargs="?", help="剧集根目录（默认 workspace/duanju）")
     p.add_argument("--series", default="D202611_001")
-    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--host", default="127.0.0.1", help="局域网审片用 0.0.0.0")
+    p.add_argument("--token", default="", help="写操作令牌（局域网开放时自动生成）")
     p.add_argument("--port", type=int, default=8095)
     p.add_argument("--status", action="store_true", help="只打印人已做的决定（agent 在 TUI 里用）")
     p.set_defaults(fn=cmd_studio)

@@ -49,7 +49,23 @@ th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 th{color:var(--muted);font-weight:600}
 .hide{display:none}
 .log{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted);white-space:pre-wrap}
+.pill.v-vert{background:var(--ok-bg);color:var(--ok)}
 .lb{background:var(--code-bg);border-radius:4px;padding:2px 6px;font-size:12px}
+/* 手机端（局域网审片的主场景）：单列 + 大触控区 + 视频优先 */
+@media (max-width:640px){
+  header{padding:10px 12px}
+  h1{font-size:15px}
+  .bar{gap:6px}
+  select,input,button{padding:9px 12px;font-size:15px}   /* ≥16px 避免 iOS 自动放大 */
+  .wrap{padding:12px 12px 60px}
+  .grid{grid-template-columns:1fr;gap:10px}
+  .shot .th{aspect-ratio:16/9}
+  .row{gap:8px}
+  .row button{flex:1;min-height:42px}
+  .tabs button{flex:1;min-height:40px}
+  .player video{max-height:40vh}
+  table{font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -59,6 +75,7 @@ th{color:var(--muted);font-weight:600}
   <div class="bar">
     <select id="ep"></select>
     <span class="pill" id="stage">—</span>
+  <span class="pill" id="aspect">—</span>
     <span class="pill" id="prog">—</span>
     <button onclick="location.reload()">刷新</button>
     <button class="primary" id="save">保存决定</button>
@@ -102,6 +119,15 @@ th{color:var(--muted);font-weight:600}
 <script>
 let S=null, EP=null, tab='shots';
 const review={}, selection={};
+// 写操作令牌：局域网开放时 URL 带 ?k=…，存下来随 POST 带上
+const KEY=(new URLSearchParams(location.search).get('k')||'');
+if(KEY) sessionStorage.setItem('studio_k',KEY);
+const TOKEN=KEY||sessionStorage.getItem('studio_k')||'';
+async function post(path,body){
+  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Studio-Token':TOKEN},
+                            body:JSON.stringify(body)});
+  return r.json();
+}
 
 async function load(){
   const r=await fetch('/api/state'); S=await r.json();
@@ -124,6 +150,11 @@ async function load(){
 function render(){
   document.getElementById('who').textContent=S.series+' · '+S.root;
   document.getElementById('stage').textContent=EP.stage;
+  document.getElementById('aspect').textContent=EP.aspect==='portrait'?'竖屏 9:16':'横屏';
+  document.getElementById('aspect').className='pill'+(EP.aspect==='portrait'?' v-vert':'');
+  // 竖屏片的缩略图用竖比例，不然视频会被压扁
+  document.getElementById('shots').style.gridTemplateColumns=
+      EP.aspect==='portrait'?'repeat(auto-fill,minmax(190px,1fr))':'repeat(auto-fill,minmax(230px,1fr))';
   document.getElementById('prog').textContent=`镜头 ${EP.clip_done}/${EP.shot_total}（${EP.pct}%）`+
       (EP.review_done?` · 已审 ${EP.review_done}`:'')+(EP.review_pending&&EP.review_pending.length?` · 待重出 ${EP.review_pending.length}`:'');
   renderShots(); renderCast(); renderEp();
@@ -208,12 +239,12 @@ async function save(){
   const job=EP.job;
   let msg='';
   if(Object.keys(selection).length){
-    const r=await fetch('/api/selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job,selection})});
-    msg+=`选图已写 ${(await r.json()).written||''}；`;
+    const j=await post('/api/selection',{job,selection});
+    msg+= j.written?`选图已写 ${j.written}；`:`选图失败：${j.error||''}；`;
   }
   if(Object.keys(review).length){
-    const r=await fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job,review})});
-    msg+=`审片决定已写 ${(await r.json()).written||''}；`;
+    const j=await post('/api/review',{job,review});
+    msg+= j.written?`审片决定已写 ${j.written}；`:`审片失败：${j.error||''}；`;
   }
   const b=document.getElementById('save'); const old=b.textContent; b.textContent=msg||'没有改动'; setTimeout(()=>b.textContent=old,2500);
 }
