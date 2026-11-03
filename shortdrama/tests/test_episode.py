@@ -65,6 +65,15 @@ class TestBuildSrt(unittest.TestCase):
         self.assertNotIn("甲", srt)
         self.assertIn("00:00:02,000 --> 00:00:04,000", srt)
 
+    def test_duplicate_subtitle_is_burned_only_once(self):
+        """同一句在多镜出现时，成片只烧第一次（观众不该看三遍同一句）。"""
+        srt = episode.build_srt(
+            [{"subtitle_cn": "你该回来了。"}, {"subtitle_cn": "别的"},
+             {"subtitle_cn": "你该回来了。"}], [2.0, 2.0, 2.0])
+        self.assertEqual(srt.count("你该回来了。"), 1)
+        self.assertIn("别的", srt)
+        self.assertIn("00:00:00,000 --> 00:00:02,000", srt)
+
 
 class TestLintStory(unittest.TestCase):
     """剧本预检：毁集级的错必须挡住，缺字段只提示。"""

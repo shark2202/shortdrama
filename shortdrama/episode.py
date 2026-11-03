@@ -259,6 +259,7 @@ def build_shots(story: dict) -> list[dict]:
             "characters": chars,
             "prompt_en": prompt,
             "subtitle_cn": sc.get("subtitle_cn", ""),
+            "dialogue_cn": sc.get("dialogue_cn", ""),
             "sfx_en": sc.get("sfx_en", ""),
             "duration_s": sc.get("duration_s"),
             "beat_cn": sc.get("beat", ""),
@@ -556,11 +557,19 @@ def stage_review(job: Path) -> None:
 
 
 def build_srt(shots: list[dict], durations: list[float]) -> str:
-    """字幕时间轴按**实际**每镜时长排。"""
-    lines, t = [], 0.0
-    for shot, dur in zip(shots, durations):
+    """字幕时间轴按**实际**每镜时长排。
+
+    去重规则：**只在相邻镜（≤2 镜，约 10 秒内）重复时去重**。
+    - 相邻重复是噪音：观众 5 秒内看两遍同一句。
+    - 隔得远的重复是**叙事回环**，必须留：E01 把"你该回来了。"放在 s11 和 s23，
+      同一场戏演两遍（钩子预演 + 正片），第二次出现才有分量——全局去重会把这个
+      设计抹掉。
+    """
+    lines, t, last = [], 0.0, {}
+    for i, (shot, dur) in enumerate(zip(shots, durations)):
         text = (shot.get("subtitle_cn") or "").strip()
-        if text:
+        if text and i - last.get(text, -99) > 2:
+            last[text] = i
             lines += [f"{len(lines)//4+1}", f"{srt_time(t)} --> {srt_time(t+dur)}", text, ""]
         t += dur
     return "\n".join(lines)
@@ -694,14 +703,32 @@ def stage_qc(job: Path) -> int:
     else:
         add("block", ep_path.name, "没有成片")
 
-    # 字幕覆盖率：短剧是听觉媒介，字幕是唯一可读信息通道。
-    # 实测 35 镜只有 7 条字幕（20%）→ 观众要读的信息严重不足。
-    with_sub = sum(1 for s in shots if (s.get("subtitle_cn") or "").strip())
-    ep["subtitle_coverage"] = f"{with_sub}/{len(shots)}"
-    if shots and with_sub / len(shots) < 0.4:
+    # 字幕：观众唯一能读到的信息通道。分开算两件事——
+    #   有效字幕 = 去重后的 subtitle_cn（上屏信息卡 + 对白字幕）
+    #   台词     = dialogue_cn（口播 / 角色说的话）
+    # 重复字幕分两类：**相邻重复**（≤2 镜）是噪音，成片已只烧一次；
+    # **隔得远的重复**是叙事回环（E01 同一场戏演两遍），必须保留。
+    subs = [(s.get("subtitle_cn") or "").strip() for s in shots]
+    pos: dict[str, list[int]] = {}
+    for i, t in enumerate(subs):
+        if t:
+            pos.setdefault(t, []).append(i)
+    adjacent = {t: p for t, p in pos.items() if any(b - a <= 2 for a, b in zip(p, p[1:]))}
+    echo = {t: p for t, p in pos.items() if t not in adjacent and len(p) > 1}
+    eff = len(pos)
+    dlg = sum(1 for s in shots if (s.get("dialogue_cn") or "").strip())
+    ep["subtitle_coverage"] = f"{eff}/{len(shots)}"
+    ep["subtitle_unique"] = eff
+    ep["dialogue_count"] = dlg
+    if echo:
+        ep["subtitle_echo"] = {t: p for t, p in echo.items()}
+    if adjacent:
         add("warn", "subtitles",
-            f"字幕覆盖率 {with_sub}/{len(shots)}（{with_sub/len(shots)*100:.0f}%），"
-            f"低于 40% —— 短剧观众靠字幕获取信息，台词太少会掉完播")
+            f"{len(adjacent)} 条字幕在相邻镜重复（成片已只烧第一次）：{list(adjacent)[:3]}")
+    if shots and eff / len(shots) < 0.15 and dlg / len(shots) < 0.15:
+        add("warn", "subtitles",
+            f"有效字幕 {eff}/{len(shots)}、台词 {dlg}/{len(shots)} 都偏低 —— "
+            "观众几分钟里读不到足够信息，建议给无对白镜补旁白或信息卡")
 
     report = {"episode": job.name, "checked": time.strftime("%F %T"),
               "episode_probe": ep, "findings": findings,
