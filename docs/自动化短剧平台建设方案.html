@@ -81,7 +81,7 @@
   <a href="#limits">3 · 硬约束与红线</a>
   <a href="#arch">4 · 总体架构</a>
   <a href="#models">5 · 本地模型与算力选型</a>
-  <a href="#decisions">6 · 十个关键决策</a>
+  <a href="#decisions">6 · 关键决策</a>
   <a href="#repo">7 · 系统形态与目录结构</a>
   <a href="#schema">8 · 数据契约</a>
   <a href="#stages">9 · 流水线六阶段细则</a>
@@ -355,7 +355,7 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 
 <!-- ================= 6 ================= -->
 <section id="decisions">
-<h2>6 · 十个关键决策</h2>
+<h2>6 · 关键决策</h2>
 <table>
 <thead><tr><th>#</th><th>决策</th><th>理由 / 证据</th><th>放弃了什么</th></tr></thead>
 <tbody>
@@ -370,6 +370,9 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 <tr><td>D9</td><td>交付形态 = CLI + 任务目录，不做 Web 后台</td><td>单人单机产线；pi-agent 的 TUI 已经能当"操作界面"</td><td>Web 控制台、账号体系</td></tr>
 <tr><td>D10</td><td>1080p 交付用重采样，不用 ML 超分</td><td>本机无放大模型权重，<code>nvidia-vfx</code> 需 TensorRT 装不上，静态 ffmpeg 无 CUDA 滤镜</td><td>真超分清晰度</td></tr>
 <tr><td>D11</td><td>资产可见性 = 只读静态页（清单 JSON + 生成的 HTML），不做资产数据库 / 写操作后台</td><td>D9 的延伸：产物天然在文件系统里，再引入数据库就会出现"第二个真相源"，与 §8.3「文件即状态、断点续跑靠目录」冲突；审片 / 挑图的选择写回 job 目录里的文件即可</td><td>资产标签 / 检索 / 多端同步</td></tr>
+<tr><td>D12</td><td>画面里不出现需要观众读懂的文字；可读信息一律走字幕</td><td>H3 / Z-Image 都不认字形，画出来的字必是乱码（实测：照片上的日期、监控时间戳、照片背面的手写尾钩全部废掉）。保留"这里有行字"的质感但标明不可辨认，观众要读的内容由后期 ffmpeg 烧字幕（永远正确）</td><td>画面内文字（日期牌 / 招牌 / 屏幕 UI）</td></tr>
+<tr><td>D13</td><td>镜内无角色时走纯 t2v 工作流，不带参考图</td><td>ref2va 会把提示词强制改成 "&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character."，于是照片背面特写 / 监控回放 / 鞋尖滴水这类物镜也会被塞两张角色脸 → H3 去画人而不是画那个东西。每镜显式声明 <code>ref</code>（角色 id 或 null）</td><td>统一的单工作流（省事但物镜全废）</td></tr>
+<tr><td>D14</td><td>定妆图提示词 = 身份锚点 + 造型 + 中性光后缀；风格词不进</td><td>① 风格词（霓虹洋红 / 低照度 / 胶片颗粒）会覆盖"中性柔光、纯灰背景"，模型顺势出美颜网红脸，且带色光污染 ref2va 参考图；② 不给性别 / 年龄 / 人种，Z-Image 默认出男性（实测三个角色全出成男的）→ 身份锚点独立成字段并硬性校验</td><td>好看的通用定妆照（但锁不住人脸）</td></tr>
 </tbody>
 </table>
 </section>
@@ -400,7 +403,7 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 │   └── assets.py             # 资产清单 + 只读静态页（已有）
 ├── prompts/                  # 提示词模板（剧本 / 分镜 / 字幕）
 ├── jobs/                     # 任务目录（每个一集一个子目录）
-└── logs/
+└── logs/</code></pre>
 
 <h3>7.2 复用关系（不重复造轮子）</h3>
 <table>
@@ -527,6 +530,8 @@ RENDER 内部逐镜：shot_01 … shot_12，每镜独立记录状态（断点续
 <tr><td>产出</td><td><code>shots.json</code>（§8.2，格式与现有脚本一致）</td></tr>
 <tr><td>验收</td><td>每条含 <code>&lt;Picture 1&gt;</code> 引用；含 <code>natural ambient audio</code> 描述（否则该镜没声音）；镜头顺序与剧本 beat 一致</td></tr>
 <tr><td>提示词纪律</td><td>沿用现有已验证句式（<code>&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. …, cinematic …, natural ambient audio: …</code>）——<b>这是实测出片的句式</b>，不要让 LLM 自由发挥结构</td></tr>
+<tr><td><b>ref 声明</b></td><td>每镜必须显式写 <code>ref</code>：<code>"c1"</code> / <code>"c2"</code> / <code>"c3"</code> = 镜内在场的人；<code>null</code> = <b>镜内无人</b>（照片背面特写 / 监控回放 / 鞋尖滴水 / 剪影 / 环境空镜）。<br>理由见 D13：ref2va 会把句式强制加上 "show the same character"，物镜被塞两张脸就会去画人。<code>null</code> 的镜走纯 t2v 工作流、不带参考图。<br>例外：照片里<b>就是角色本人</b>的那几镜仍用 ref2va——观众要靠脸认出"照片里的人是她"，参考图正是这个用途</td></tr>
+<tr><td>文字纪律</td><td>画面里<b>不得出现需要观众读懂的文字</b>（D12）：H3 / Z-Image 画出的字必是乱码。可读信息一律进 <code>subtitle_cn</code>（后期烧，一定正确）；画面内可保留"这里有行字"的质感但必须标明不可辨认（<code>illegible</code> / <code>too small to read</code>）</td></tr>
 </tbody>
 </table>
 
@@ -692,6 +697,9 @@ RENDER 内部逐镜：shot_01 … shot_12，每镜独立记录状态（断点续
 <tr><td>R9</td><td>磁盘被中间产物吃满</td><td>渲染失败</td><td>可用 &lt; 50GB</td><td>每集产物 ≤ 300MB；保留最近 20 集，其余自动清理；下载前查空间</td></tr>
 <tr><td>R10</td><td>prompt_id 静默去重导致"任务消失"</td><td>调试抓瞎</td><td>提交后 history 里没有记录</td><td>每镜 seed 唯一；用 <code>bump_seed()</code>；带唯一 <code>client_id</code></td></tr>
 <tr><td>R11</td><td>直营内容合规（题材/肖像/配音授权）</td><td>下架/法务</td><td>—</td><td>题材库白名单；<b>首版一律用虚构角色、不使用真人肖像</b>；台词走字幕或授权 TTS</td></tr>
+<tr><td>R12</td><td>画面内文字渲染成乱码（日期 / 时间戳 / 手写字 / 招牌）</td><td>观众看到乱码，尾钩失效</td><td>画面里出现疑似文字</td><td>生成期禁写可读文字（D12），可读信息一律进 <code>subtitle_cn</code> 由后期烧；<code>textcheck.py</code> 出图前拦截</td></tr>
+<tr><td>R13</td><td>物镜被 ref2va 画成人物（照片特写变"某人拿着照片"）</td><td>叙事错乱、节奏断裂</td><td>物镜里冒出人脸</td><td>每镜显式声明 <code>ref</code>，<code>null</code> 走纯 t2v（D13）；<code>set_refs.py</code> 逐镜标注</td></tr>
+<tr><td>R14</td><td>定妆图"大众脸" / 性别错 / 跨集换脸</td><td>全剧一致性崩塌（R3 的上游）</td><td>角色不像设定、每集换人</td><td>身份锚点独立成字段并硬性校验（D14）；<code>facecheck.py</code> 出图前拦截；定妆图 3 集共用（<code>cast/</code> 软链）</td></tr>
 </tbody>
 </table>
 </section>
