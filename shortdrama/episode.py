@@ -62,7 +62,7 @@ FPS = 24
 sys.path.insert(0, str(H3 / "python" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from shortdrama import facecheck, loudness  # noqa: E402
+from shortdrama import facecheck, grade, loudness  # noqa: E402
 
 
 def comfy():
@@ -237,6 +237,9 @@ def build_shots(story: dict) -> list[dict]:
     "<Picture 1> and <Picture 2> show the same character. <动作/镜头/光线>, <风格>, natural ambient audio: <环境音>"
     """
     style = story.get("style_en", "").strip(" ,")
+    # 角色的英文外形锚点：ref2va 光靠参考图撑人脸，参考图一漂就没第二重约束
+    # （实测 E02/E03 的周姐有 9 镜出成年轻男性）。H3 只吃英文，所以必须写在这里。
+    traits = {c["id"]: (c.get("traits_en") or "").strip() for c in story.get("characters", [])}
     shots = []
     for sc in story["scenes"]:
         chars = sc.get("chars") or []
@@ -245,7 +248,10 @@ def build_shots(story: dict) -> list[dict]:
         body = sc.get("prompt_en", "").strip().rstrip(".")
         if ref:
             # 有角色在场：ref2va 的固定句式（实测出片的句式，别让模型自由发挥）
-            prompt = "<Picture 1> and <Picture 2> show the same character. " + body
+            prompt = "<Picture 1> and <Picture 2> show the same character."
+            if traits.get(ref):
+                prompt += " " + traits[ref] + ","
+            prompt += " " + body
         else:
             # 物镜/环境/剪影/监控回放：加角色句式会让 H3 去画人而不是画那个东西
             prompt = body
@@ -589,10 +595,24 @@ def stage_assemble(job: Path) -> None:
     if missing:
         raise SystemExit(f"缺镜头：{missing}")
 
+    # 逐镜归一后再拼：H3 每镜原生音轨的响度差异很大（整片 LRA 高达 22-24 LU），
+    # 逐镜对齐到 -20 LUFS 后，整片 LRA 降到 8.9 LU —— 这才是"集与集响度一致"的正解
+    # （压整片只会把动态一起压扁；逐镜对齐是声音编辑的标准做法）。
+    norm_dir = job / "clips" / "norm"
+    norm_dir.mkdir(exist_ok=True)
+    norm_clips = []
+    for c in clips:
+        n = norm_dir / c.name
+        if not _fresh(n, [c]):
+            run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-i", str(c),
+                 "-af", "loudnorm=I=-20:TP=-3:LRA=11",
+                 "-c:v", "copy", "-c:a", "aac", "-ar", "48000", "-b:a", "192k", str(n)])
+        norm_clips.append(n)
+
     lst = job / "clips" / "concat.txt"
-    lst.write_text("".join(f"file '{c.resolve()}'\n" for c in clips), encoding="utf-8")
+    lst.write_text("".join(f"file '{c.resolve()}'\n" for c in norm_clips), encoding="utf-8")
     concat = job / "clips" / "concat.mp4"
-    if _fresh(concat, clips):          # 中间件复用：重出 1 镜不必重拼全片
+    if _fresh(concat, norm_clips):     # 中间件复用：重出 1 镜不必重拼全片
         print("[assemble] concat.mp4 已是最新，复用")
     else:
         run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-f", "concat",
@@ -632,8 +652,17 @@ def stage_assemble(job: Path) -> None:
     # 单遍 loudnorm 实测不命中目标（要 -16 得到 -18.1），且 alimiter 默认 level=true
     # 会把限掉的电平又推回去 —— 那是成片削波的直接成因（链末端 -0.5 dB → AAC 后 0.0 dBFS）。
     audio_chain = loudness.audio_chain_for(up)
+    # 系列级亮度统一：3 集平均亮度差 25%（E01=100/E02=80/E03=85），连续追剧会跳。
+    vf_parts = [f"subtitles=subtitles.srt:force_style='{style}'"]
+    bright = grade.measure_brightness(up)
+    corr = grade.brightness_filter(bright)
+    if corr:
+        vf_parts.append(corr)
+        print(f"[assemble] 亮度校正 {bright:.1f} → {grade.TARGET_YAVG:.0f}（{corr}）")
+    else:
+        print(f"[assemble] 亮度 {bright:.1f} 已达标，不校正")
     run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-i", str(up),
-         "-vf", f"subtitles=subtitles.srt:force_style='{style}'",
+         "-vf", ",".join(vf_parts),
          "-af", audio_chain,
          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
          "-r", str(FPS), "-c:a", "aac", "-ar", "48000", "-b:a", "192k",
