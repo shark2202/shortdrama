@@ -109,6 +109,12 @@ $FF -y -framerate 1 -pattern_type glob -i 'qc/f*.png' -vf tile=3x2 -frames:v 1 q
 5. **同一 prompt 会被静默去重**：ComfyUI 的 prompt_id 由输入决定 → seed 必须每镜递增。
 6. **本机没有 ffprobe**：`ffmpeg -i` 解析 stderr 拿时长/分辨率/帧率。
 7. **显存是唯一硬瓶颈**：本地 LLM（13–17GB）与 H3（≈20GB）不能同驻，流水线阶段必须串行；渲染期间别开别的 GPU 任务。
+8. **不给性别/年龄/人种 → Z-Image 默认出男性**。实测：三角色（两女一男）全部出成男的——造型描述里只有骨相/发型/衣着，模型拿不到性别就自己填。→ 身份锚点（`identity_cn` = "亚洲女性，24岁"）**独立成字段**，出图提示词 = 身份 + 造型 + 中性光后缀。`facecheck.py` 出图前硬性校验，不合格直接拒绝渲染。
+9. **风格词不能进定妆提示词**：`style_cn`（霓虹洋红/低照度/胶片颗粒）会覆盖"中性柔光、纯灰背景"，模型顺势出美颜网红脸，而且带色光污染 ref2va 的参考图。定妆图要的是干净中性光。
+10. **备图必须是主图的 i2i 派生**：直接复制另一张 t2i 候选 = 那是**另一个人**，而 ref2va 的 `<Picture 2>` 要求"同一个角色的另一张"。用错人脸 = 跨镜崩脸。→ `pick` 阶段改成从主图 i2i(denoise 0.65) 派生。
+11. **画面里不能有需要观众读懂的文字**：H3/Z-Image 画出的字必是乱码。照片上的日期、监控时间戳、照片背面的手写尾钩全部废掉。→ 可读信息一律进 `subtitle_cn`（后期 ffmpeg 烧，一定正确）；画面内可保留"这里有行字"的质感但必须标明 illegible / too small to read。`textcheck.py` 出图前拦截，`tools/fix_text_shots.py` 定点改写。
+12. **物镜必须走纯 t2v**：ref2va 会把提示词强制改成 `"<Picture 1> and <Picture 2> show the same character."`，于是照片背面特写/监控回放/鞋尖滴水也被塞两张脸 → H3 去画人而不是画那个东西。→ 每镜显式声明 `ref`（角色 id 或 `null`），`null` 走 `h3_w4a8_t2v_bypass_api.json` 且不带参考图。`tools/set_refs.py` 逐镜标注（105 镜里 18 镜判为无角色在场）。
+13. **跨集必须共用定妆图**：`cast/` 放剧集根，每集目录里软链过去，否则 3 集各出各的脸。
 
 ## 6. 目录约定
 
