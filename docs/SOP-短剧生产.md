@@ -127,6 +127,25 @@ LIMITER="alimiter=limit=0.891:attack=1:release=50:level=disabled"
 3. **单遍 loudnorm 不命中目标**，LRA 目标也不生效（实测 LRA 21 压不到 12）。必须两遍。
 
 代码：`shortdrama/loudness.py`（`measure()` / `audio_chain_for()` / `check()`），已接进 `assemble` 与 `qc`。
+## 2.8 在 TUI 里怎么审核（图/视频/文档都看不见的时候）
+
+herdr TUI 没有图片与视频预览，**审核不能建立在"人肉眼看图"上**。三条路，按成本从低到高：
+
+| 路径 | 命令 | 适合 |
+|---|---|---|
+| **只看文字**（首选） | `cat <job>/qc/review.md` | 审核单：每镜一行（角色/字幕/关键帧/视频/时长/seed/结论/备注）。`review` 阶段自动生成 |
+| **终端看图** | `/home/a/ai-work/.venv/bin/python shortdrama/tview.py <job>/qc/keyframes_sheet.png` | Pillow → ANSI 真彩色半块，直接打在终端里（本机没装 chafa/viu/img2txt） |
+| **浏览器看大图/视频** | `./sd assets serve <job-dir> --port 8092` | 给人看：图直接渲染、视频内嵌播放；递归扫子目录（cast/ frames/ clips/ qc/） |
+
+**视频没有 ANSI 化的办法** → 统一走"抽帧成图"：`review` 已经把每镜第 2.5 秒抽成 `qc/vNN.png`
+并拼成 `qc/frames_sheet.png`，用上面的终端/浏览器路径看即可。
+
+**文档**：`.md`/`.txt` 在 TUI 里直接读；PDF 用 `pdftotext x.pdf -`；其他格式用
+`libreoffice --headless --convert-to txt x.docx`（本机有 pdftotext / libreoffice）。
+
+**分工原则**：agent 看图（模型侧能拿到图像）→ 把结论写进 `review.md` 的「结论」列；
+人只做**拍板**（合格/重出 + 原因），不必自己开图。这是 TUI 环境里唯一成立的审核闭环。
+
 ## 3. 每阶段的"人/agent 该做什么"
 
 ### P1 剧本

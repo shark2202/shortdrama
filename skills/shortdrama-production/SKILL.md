@@ -53,12 +53,16 @@ $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → $EP/repor
    **构图/人物/光线不对，现在改是 10s，等出完视频再改是 210s**。
 6. **出镜**（P4）：`render` 直接后台跑（6 镜 ≈ 21 分钟），失败自动换 seed 重试。
    要构图完全可控就换 `render-i2v`（关键帧当首帧，代价是运镜自由度下降）。
-7. **审片**（P4.5）：`review` → `qc/frames_sheet.png` + `clips/manifest.json`；废镜在这里重出。
+7. **审片**（P4.5）：`review` → `qc/review.md`（**文字审核单**：每镜一行 + 结论列）+ `qc/frames_sheet.png` + `clips/manifest.json`；废镜在这里重出。
+   **TUI 里人看不到图**：让 agent 看图并把结论写进 `review.md` 的「结论」列，人只拍板；
+   人自己要看图用 `python3 shortdrama/tview.py <job>/qc/frames_sheet.png`（终端 ANSI 彩色块）
+   或 `./sd assets serve <job-dir> --port 8092`（浏览器，图+视频）。
 8. **后期**（P5）：`assemble`（中间件会自动复用，重出 1 镜不必重拼重放大）。
 9. **质检**（P6）：`qc` + **自己看片**，把新坑写进 SOP。
 
 ## 踩过的坑（别再踩）
-
+- **TUI 里没有图片/视频预览**：别让审核依赖"人肉眼看图"。
+  结论落成文字（`review.md` 的结论列），agent 看图、人拍板；人要看图用 `tview.py`（ANSI 彩色块）或资产页。
 - **定妆描述不能挡脸**：写"帽檐压低遮住眼睛"→ Z-Image 直接画出黑色眼罩，定妆图作废。
   改写成"帽檐压低"以外的中性描述，或直接不写遮挡物。
 - **H3 只吃英文提示词**：中文写进 `prompt_en` 效果差（文本编码器是英文的）。
