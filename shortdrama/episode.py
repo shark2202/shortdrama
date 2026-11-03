@@ -223,14 +223,22 @@ def build_shots(story: dict) -> list[dict]:
     shots = []
     for sc in story["scenes"]:
         chars = sc.get("chars") or []
-        prompt = ("<Picture 1> and <Picture 2> show the same character. "
-                  + sc.get("prompt_en", "").strip().rstrip("."))
+        # ref 显式声明（None = 镜内无人 → t2v）；旧剧本没这个字段时回退 primary
+        ref = sc["ref"] if "ref" in sc else sc.get("primary")
+        body = sc.get("prompt_en", "").strip().rstrip(".")
+        if ref:
+            # 有角色在场：ref2va 的固定句式（实测出片的句式，别让模型自由发挥）
+            prompt = "<Picture 1> and <Picture 2> show the same character. " + body
+        else:
+            # 物镜/环境/剪影/监控回放：加角色句式会让 H3 去画人而不是画那个东西
+            prompt = body
         if style:
             prompt += f", {style}"
         prompt += f", natural ambient audio: {sc.get('sfx_en', '')}"
         shots.append({
             "idx": sc["idx"], "id": sc["id"], "shot_type": sc.get("shot_type", ""),
-            "character": sc.get("primary") or (chars[0] if chars else None),
+            "character": ref,
+            "ref": ref,
             "characters": chars,
             "prompt_en": prompt,
             "subtitle_cn": sc.get("subtitle_cn", ""),
@@ -248,12 +256,18 @@ def stage_shots(job: Path) -> None:
 
 
 def stage_render(job: Path) -> None:
-    """逐镜出镜（H3 ref2va）。已存在的 clips/NN.mp4 跳过 = 单镜粒度续跑。"""
+    """逐镜出镜（H3）。已存在的 clips/NN.mp4 跳过 = 单镜粒度续跑。
+
+    两类镜走两套工作流：
+    - ref2va（有角色在场）：带两张定妆图 + "<Picture 1> and <Picture 2> show the same character"
+    - t2v（物镜/环境/剪影/监控回放）：不带任何参考图，也不加角色句式
+    """
     story = load(job / "story.json")
     shots = load(job / "shots.json")["shots"]
     (job / "clips").mkdir(parents=True, exist_ok=True)
     client = comfy()
-    template = load(WORKFLOWS / "h3_w4a8_ref2va_api.json")
+    tpl_ref2va = load(WORKFLOWS / "h3_w4a8_ref2va_api.json")
+    tpl_t2v = load(WORKFLOWS / "h3_w4a8_t2v_bypass_api.json")
 
     refs = {}
     for ch in story["characters"]:
@@ -271,9 +285,10 @@ def stage_render(job: Path) -> None:
         if dest.exists():
             print(f"[render] shot {idx:02d} 已存在，跳过", flush=True)
             continue
-        r1, r2 = refs[shot["character"]]
+        ref = shot.get("ref")
+        r1, r2 = refs[ref] if ref else (None, None)
         for attempt in range(RETRIES):
-            graph = copy.deepcopy(template)
+            graph = copy.deepcopy(tpl_ref2va if ref else tpl_t2v)
             for node in graph.values():
                 ins = node.get("inputs", {})
                 if ins.get("prompt") == "__H3_PROMPT__":
@@ -284,6 +299,8 @@ def stage_render(job: Path) -> None:
                     ins["image"] = r2
                 if "noise_seed" in ins:
                     ins["noise_seed"] = SEED + idx + attempt
+                if "seed" in ins and "noise_seed" not in ins:
+                    ins["seed"] = SEED + idx + attempt
             t0 = time.time()
             try:
                 files = collect(client.render(graph, max_s=3600))
