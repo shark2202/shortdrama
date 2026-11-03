@@ -49,7 +49,7 @@ FPS = 24
 sys.path.insert(0, str(H3 / "python" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from shortdrama import facecheck  # noqa: E402
+from shortdrama import facecheck, loudness  # noqa: E402
 
 
 def comfy():
@@ -551,7 +551,10 @@ def stage_assemble(job: Path) -> None:
     style = ("FontName=Noto Sans CJK SC,FontSize=42,PrimaryColour=&H00FFFFFF,"
              "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=56,Alignment=2")
     # 统一响度 + 限幅（H3 源音轨实测可能到 0 dBFS，削波必须在这里压住）
-    audio_chain = "loudnorm=I=-16:TP=-1.5:LRA=11,alimiter=limit=0.891:attack=5:release=50"
+    # 统一响度：两遍 loudnorm（先测后用）+ 前后限幅。
+    # 单遍 loudnorm 实测不命中目标（要 -16 得到 -18.1），且 alimiter 默认 level=true
+    # 会把限掉的电平又推回去 —— 那是成片削波的直接成因（链末端 -0.5 dB → AAC 后 0.0 dBFS）。
+    audio_chain = loudness.audio_chain_for(up)
     run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-i", str(up),
          "-vf", f"subtitles=subtitles.srt:force_style='{style}'",
          "-af", audio_chain,
@@ -612,11 +615,22 @@ def stage_qc(job: Path) -> int:
                    "-af", "volumedetect", "-f", "null", "-"])
         if "black_start" in err:
             add("block", ep_path.name, "成片检出黑帧")
-        m = re.search(r"max_volume:\s*(-?\d+(?:\.\d+)?) dB", err)
-        if m and float(m.group(1)) > -0.3:
-            add("block", ep_path.name, f"成片削波 max_volume={m.group(1)} dB")
+        # 响度三项按交付标准判（比单看 max_volume 准：能看出响度偏离与动态范围过宽）
+        measured = loudness.measure(ep_path)
+        ep["audio_measured"] = measured
+        for f in loudness.check(measured):
+            add(f["level"], ep_path.name, f["message"])
     else:
         add("block", ep_path.name, "没有成片")
+
+    # 字幕覆盖率：短剧是听觉媒介，字幕是唯一可读信息通道。
+    # 实测 35 镜只有 7 条字幕（20%）→ 观众要读的信息严重不足。
+    with_sub = sum(1 for s in shots if (s.get("subtitle_cn") or "").strip())
+    ep["subtitle_coverage"] = f"{with_sub}/{len(shots)}"
+    if shots and with_sub / len(shots) < 0.4:
+        add("warn", "subtitles",
+            f"字幕覆盖率 {with_sub}/{len(shots)}（{with_sub/len(shots)*100:.0f}%），"
+            f"低于 40% —— 短剧观众靠字幕获取信息，台词太少会掉完播")
 
     report = {"episode": job.name, "checked": time.strftime("%F %T"),
               "episode_probe": ep, "findings": findings,
