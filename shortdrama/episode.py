@@ -520,8 +520,38 @@ def stage_review(job: Path) -> None:
     dump(job / "clips" / "manifest.json", manifest)
     kf_sheet = _sheet(keyframes, qc / "keyframes_sheet.png")
     vf_sheet = _sheet(frames, qc / "frames_sheet.png")
+    # 文字审核单：TUI 里看不到图时，人/agent 靠这张表就能审
+    story = load(job / "story.json")
+    lines = [f"# {job.name} 审核单", "",
+             f"生成：{time.strftime('%F %T')} · {story.get('title','')}"
+             f"（{story.get('genre','')} / {len(shots)} 镜 / {story.get('duration_s','')}s）", "",
+             "| # | 角色 | 字幕 | 关键帧 | 视频 | 时长 | seed | 结论 | 备注 |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for m in manifest:
+        lines.append(f"| {m['idx']} | {m.get('ref') or '-'} | {m.get('subtitle_cn') or '-'} | "
+                     f"{m.get('keyframe') or '-'} | {m.get('clip') or '缺'} | "
+                     f"{m['duration_s']:.2f}s | {m['seed']} | ☐合格 ☐重出 | |")
+    lines += [
+        "",
+        "## 怎么审（TUI 里看不到图也能审）",
+        "",
+        "1. **看图（终端）**：`python3 shortdrama/tview.py qc/keyframes_sheet.png`"
+        "（Pillow → ANSI 彩色半块，直接在终端里显示）",
+        "2. **看图（浏览器）**：`./sd assets serve <job-dir> --port 8092`"
+        "（图直接渲染、视频内嵌播放；给人看用这个）",
+        "3. **看视频**：视频无法 ANSI 化 → `review` 已抽帧成 qc/frames_sheet.png，同样用 1/2 看",
+        "4. **只看文字**：本表的「结论」列 + `report.json`（自动质检）",
+        "",
+        "## 结论怎么写",
+        "",
+        "- **合格**：人物与定妆图一致、构图符合 beat、无穿帮畸变、字幕对得上。",
+        "- **重出**：写清原因（人脸不一致 / 构图错 / 畸变 / 动作不对 / 黑帧）+ 换哪个 seed。",
+        "- 重出一镜：删掉 `clips/NN.mp4` 再跑 `episode.py <job> render`（单镜粒度续跑）。",
+    ]
+    (qc / "review.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"[review] 关键帧拼图 {kf_sheet}")
     print(f"[review] 视频抽帧拼图 {vf_sheet}")
+    print(f"[review] 文字审核单 {qc/'review.md'}")
     print(f"[review] 清单 → {job/'clips'/'manifest.json'}")
 
 
