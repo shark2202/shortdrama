@@ -66,5 +66,66 @@ class TestBuildSrt(unittest.TestCase):
         self.assertIn("00:00:02,000 --> 00:00:04,000", srt)
 
 
+class TestLintStory(unittest.TestCase):
+    """剧本预检：毁集级的错必须挡住，缺字段只提示。"""
+
+    def _story(self, **over):
+        s = {
+            "shot_count": 1, "duration_s": 5.2, "style_cn": "电影感",
+            "characters": [{"id": "c1", "desc_cn": "亚洲年轻女性，24岁，黑色长直发，米色针织衫"}],
+            "scenes": [{"id": "s1", "idx": 1, "ref": "c1", "duration_s": 5.2,
+                        "prompt_en": "A woman stands behind a counter.",
+                        "sfx_en": "rain", "subtitle_cn": "字幕", "prompt_cn": "收银台后的女人"}],
+        }
+        s.update(over)
+        return s
+
+    def _msgs(self, story, level=None):
+        ps = episode.lint_story(story)
+        if level:
+            ps = [p for p in ps if p["level"] == level]
+        return " | ".join(p["message"] for p in ps)
+
+    def test_clean_story_has_no_blocking_problem(self):
+        self.assertEqual("", self._msgs(self._story(), "block"))
+
+    def test_chinese_prompt_is_blocking(self):
+        story = self._story()
+        story["scenes"][0]["prompt_en"] = "一个女孩站在收银台后面。"
+        self.assertIn("含中文", self._msgs(story, "block"))
+
+    def test_unknown_reference_character_is_blocking(self):
+        story = self._story()
+        story["scenes"][0]["ref"] = "c9"
+        self.assertIn("不存在", self._msgs(story, "block"))
+
+    def test_shot_count_mismatch_is_blocking(self):
+        self.assertIn("shot_count", self._msgs(self._story(shot_count=3), "block"))
+
+    def test_missing_sound_and_subtitle_are_warnings_only(self):
+        story = self._story()
+        story["scenes"][0]["sfx_en"] = ""
+        story["scenes"][0]["subtitle_cn"] = ""
+        msgs = self._msgs(story)
+        self.assertIn("没有 sfx_en", msgs)
+        self.assertIn("没有 subtitle_cn", msgs)
+        self.assertEqual("", self._msgs(story, "block"))
+
+
+class TestFramePrompt(unittest.TestCase):
+    def test_prompt_contains_scene_character_and_style(self):
+        story = {"style_cn": "电影感，冷调"}
+        sc = {"prompt_cn": "便利店里的女人"}
+        ch = {"desc_cn": "亚洲年轻女性，24岁"}
+        p = episode.frame_prompt(story, sc, ch)
+        self.assertIn("便利店里的女人", p)
+        self.assertIn("亚洲年轻女性", p)
+        self.assertIn("电影感", p)
+
+    def test_falls_back_to_beat_when_prompt_cn_missing(self):
+        p = episode.frame_prompt({"style_cn": ""}, {"beat": "开场：雨夜竹林"}, None)
+        self.assertIn("开场：雨夜竹林", p)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6,17 +6,19 @@
 
 ## 硬约束
 
-1. **中英双轨**：`beat` / `subtitle_cn` / `sfx` / `desc_cn` 用中文（给人看），
+1. **中英双轨**：`beat` / `subtitle_cn` / `sfx` / `desc_cn` / `prompt_cn` 用中文（给人看），
    `prompt_en` / `sfx_en` / `style_en` 用英文（喂 H3，它的文本编码器是英文的）。
    **中文不许进 H3 提示词**，效果差。
 2. **镜数与时长对齐**：`shot_count` 镜 × `duration_s` ≈ `duration_s` 总时长。
    H3 每镜固定 124 帧 @24fps = 5.17s，所以默认 `duration_s: 5.2`。
 3. **英文提示词三件套**：`prompt_en` 必须同时写清
    **动作** + **镜头运动/景别** + **光线**；环境音写进 `sfx_en`（H3 靠它出声）。
-4. **每镜一个主角**：`primary` 指这一镜用谁的定妆图当参考（跨镜人脸锁靠它）。
-   两人同框的镜头，参考图给主角，另一人只用文字描述。
+4. **每镜一个主角**：`ref` 指这一镜用谁的定妆图当参考（跨镜人脸锁靠它）；
+   镜内无人（物镜/空镜）时 `ref` 写 `null`，走 t2v 路线。
 5. **定妆描述不能挡脸**：`desc_cn` 里不要写"帽檐压低遮住眼睛""蒙面""背对镜头"这类
    遮住五官的描述——Z-Image 会照着画出黑眼罩/黑纱，定妆图直接废掉。
+6. **每镜加 `prompt_cn`**：中文画面描述（景别 + 构图 + 光线）。
+   它是"关键帧先行"那一步的输入——出镜前 10s 一张图就能审片，改图比改视频便宜 20 倍。
 
 ## schema
 
@@ -35,8 +37,9 @@
   "scenes": [
     {
       "id": "s1", "idx": 1,
-      "chars": ["c1"], "primary": "c1",
+      "chars": ["c1"], "ref": "c1",
       "beat": "开场：深夜空荡的便利店，雨打玻璃，收银台后的女主在擦杯子",
+      "prompt_cn": "深夜空荡的便利店内部，货架纵深排列，雨点打在玻璃窗上，收银台后一名年轻女店员低头擦拭玻璃杯，冷青色顶光，玻璃反光，广角镜头",
       "duration_s": 5.2,
       "shot_type": "wide",
       "prompt_en": "A young woman stands behind the counter of an empty convenience store at night, slowly wiping a glass with a cloth, viewed through a rain-streaked window, slow dolly in, cold teal light from the ceiling panels",

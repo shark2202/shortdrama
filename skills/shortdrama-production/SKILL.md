@@ -27,11 +27,15 @@ EP=/home/a/ai-work/duanju/<episode-id>      # 一集 = 一个目录
 EPY=/home/a/ai-work/.venv/bin/python
 SCRIPT=/home/a/ai-work/workspace/shortdrama/shortdrama/episode.py
 
+$EPY $SCRIPT $EP lint      # 剧本预检（毁集级错误在这里挡下，秒级）
 $EPY $SCRIPT $EP cast      # 出定妆候选图 → $EP/cast/<id>_cand{1,2,3}.png
 #   ↓ agent 看图挑人（read 工具直接看 PNG），写 $EP/cast/selection.json
 $EPY $SCRIPT $EP pick      # → $EP/cast/<id>.png（主）+ <id>_alt.png（备）
 $EPY $SCRIPT $EP shots     # story.json → shots.json（自动加 <Picture 1> 前缀）
-$EPY $SCRIPT $EP render    # 逐镜出镜 → $EP/clips/NN.mp4（约 200s/镜，单镜粒度续跑）
+$EPY $SCRIPT $EP frames    # 每镜 1 张关键帧图（10s/镜）→ $EP/frames/NN.png
+#   ↓ agent 看 $EP/qc/keyframes_sheet.png 审片：构图/人物/光线对不对
+$EPY $SCRIPT $EP render    # 逐镜出镜 → $EP/clips/NN.mp4（约 210s/镜，单镜粒度续跑）
+$EPY $SCRIPT $EP review    # 关键帧拼图 + 视频抽帧拼图 + clips/manifest.json（一屏审片）
 $EPY $SCRIPT $EP assemble  # 拼接→3x 放大→烧字幕+统一响度 → $EP/episode.mp4
 $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → $EP/report.json（阻断项退出码非 0）
 ```
@@ -39,14 +43,19 @@ $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → $EP/repor
 ## agent 在每一步该干什么
 
 1. **写剧本**（P1）：按 `workspace/shortdrama/prompts/story.md` 的 schema 写 `$EP/story.json`。
-   中英双轨；`prompt_en` 必须是英文；每镜一个 `primary` 角色。
-2. **出定妆图**（P2）：跑 `cast`，然后**用 read 工具逐张看候选图**再挑：
+   中英双轨；`prompt_en` 必须是英文；每镜一个 `ref` 角色；每镜加 `prompt_cn`（中文画面描述，供关键帧用）。
+2. **预检**：`lint`（秒级）——毁集级的错（中文 prompt_en、角色引用错、镜数不符）在这里挡下。
+3. **出定妆图**（P2）：跑 `cast`，然后**用 read 工具逐张看候选图**再挑：
    主图 = 脸最正、最清楚、五官不被遮挡的一张；备图 = 同一张脸但角度略不同。
    把选择写进 `cast/selection.json` 再跑 `pick`。
-3. **分镜**（P3）：`shots` 阶段自动拼句式，不要手改 shots.json。
-4. **出镜**（P4）：`render` 直接后台跑（6 镜 ≈ 20 分钟），失败自动换 seed 重试。
-5. **后期**（P5）：`assemble`。
-6. **质检**（P6）：`qc` + **自己看片**（抽帧看人脸是否一致、有没有黑帧），写进 SOP。
+4. **分镜**（P3）：`shots` 阶段自动拼句式，不要手改 shots.json。
+5. **关键帧**（P3.5）：`frames`（10s/镜）→ 看 `qc/keyframes_sheet.png`：
+   **构图/人物/光线不对，现在改是 10s，等出完视频再改是 210s**。
+6. **出镜**（P4）：`render` 直接后台跑（6 镜 ≈ 21 分钟），失败自动换 seed 重试。
+   要构图完全可控就换 `render-i2v`（关键帧当首帧，代价是运镜自由度下降）。
+7. **审片**（P4.5）：`review` → `qc/frames_sheet.png` + `clips/manifest.json`；废镜在这里重出。
+8. **后期**（P5）：`assemble`（中间件会自动复用，重出 1 镜不必重拼重放大）。
+9. **质检**（P6）：`qc` + **自己看片**，把新坑写进 SOP。
 
 ## 踩过的坑（别再踩）
 

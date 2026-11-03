@@ -63,11 +63,15 @@ EP=/home/a/ai-work/duanju/D202611_001
 EPY=/home/a/ai-work/.venv/bin/python
 SCRIPT=workspace/shortdrama/shortdrama/episode.py
 
+$EPY $SCRIPT $EP lint      # 剧本预检（毁集级错误在秒级挡下）
 $EPY $SCRIPT $EP cast      # 定妆候选图（Z-Image 中文 t2i，约 10s/张）
 #   ↓ agent 看图挑人 → 写 $EP/cast/selection.json
 $EPY $SCRIPT $EP pick      # → cast/<id>.png（主）+ <id>_alt.png（备）
 $EPY $SCRIPT $EP shots     # story.json → shots.json（自动加 <Picture 1> 前缀）
-$EPY $SCRIPT $EP render    # 逐镜出镜（H3 ref2va，约 200s/镜）
+$EPY $SCRIPT $EP frames    # 每镜 1 张关键帧图（约 10s/镜）→ frames/NN.png
+#   ↓ agent 看 qc/keyframes_sheet.png 审片：构图/人物/光线对不对（改图 10s vs 改视频 210s）
+$EPY $SCRIPT $EP render    # 逐镜出镜（H3 ref2va/t2v，约 210s/镜）
+$EPY $SCRIPT $EP review    # 关键帧拼图 + 视频抽帧拼图 + clips/manifest.json（一屏审片）
 $EPY $SCRIPT $EP assemble  # 拼接 → 3x 放大 → 烧字幕 + 统一响度 → episode.mp4
 $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → report.json
 ```

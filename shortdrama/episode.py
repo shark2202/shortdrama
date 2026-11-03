@@ -10,12 +10,16 @@
 只补现有脚本没覆盖的三件事：每镜换角色、烧字幕+统一响度、自动质检。
 
 阶段（可单独重跑）：
-  cast     出定妆候选图（Z-Image 中文 t2i）
-  pick     按 cast/selection.json 落地主图 cast/<id>.png + 备图 cast/<id>_alt.png
-  shots    story.json → shots.json（H3 提示词句式固定，不让模型自由发挥）
-  render   逐镜出镜（H3 ref2va），断点续跑粒度 = 单镜
-  assemble 拼接 → 3x 放大 → 烧字幕 + 统一响度 → episode.mp4
-  qc       自动质检 → report.json
+  lint      剧本预检：英文提示词/角色引用/时长/镜数 + 造型检查（毁集级错误挡在 10 秒处）
+  cast      出定妆候选图（Z-Image 中文 t2i）
+  pick      按 cast/selection.json 落地主图 cast/<id>.png + 备图 cast/<id>_alt.png
+  shots     story.json → shots.json（H3 提示词句式固定，不让模型自由发挥）
+  frames    每镜 1 张关键帧图（Z-Image 中文 t2i，10s/镜）→ frames/NN.png（审片用）
+  render    逐镜出镜（H3 ref2va/t2v，文本驱动构图），断点续跑粒度 = 单镜
+  render-i2v 同上，但用关键帧当首帧（构图 100% 可控）
+  review    关键帧拼图 + 视频抽帧拼图 + clips/manifest.json（一屏审片）
+  assemble  拼接 → 3x 放大 → 烧字幕 + 统一响度 → episode.mp4
+  qc        自动质检 → report.json
 
 用法：
   /home/a/ai-work/.venv/bin/python shortdrama/episode.py <job-dir> [阶段 ...]
@@ -255,7 +259,115 @@ def stage_shots(job: Path) -> None:
     print(f"[shots] {len(shots)} 镜 → {job/'shots.json'}")
 
 
-def stage_render(job: Path) -> None:
+def lint_story(story: dict) -> list[dict]:
+    """剧本预检（纯函数）：返回 [{level, where, message}]，block = 会毁掉一集。"""
+    problems: list[dict] = []
+
+    def add(level, where, msg):
+        problems.append({"level": level, "where": where, "message": msg})
+
+    try:  # 并行会话的剧本/造型检查（有就用，没有不阻塞）
+        from shortdrama import facecheck, textcheck
+        for c in story.get("characters", []):
+            for p in facecheck.check_character(c):
+                add("warn", f"character {c.get('id')}", p)
+        for p in textcheck.check_story(story):
+            add("warn", "story", p)
+    except Exception:   # 并行会话的模块还在改，坏了也不该拖垮本阶段
+        pass
+
+    scenes = story.get("scenes", [])
+    ids = {c.get("id") for c in story.get("characters", [])}
+    if story.get("shot_count") and story["shot_count"] != len(scenes):
+        add("block", "story", f"shot_count={story['shot_count']} 与 scenes 数 {len(scenes)} 不符")
+    if [s.get("idx") for s in scenes] != list(range(1, len(scenes) + 1)):
+        add("block", "story", "镜头 idx 不连续（应为 1..N）")
+    for s in scenes:
+        where = f"scene {s.get('id') or s.get('idx')}"
+        pe = s.get("prompt_en", "")
+        if not pe.strip():
+            add("block", where, "prompt_en 为空")
+        elif any(ord(ch) > 0x2E80 for ch in pe):
+            add("block", where, "prompt_en 含中文（H3 的文本编码器只吃英文）")
+        if not s.get("sfx_en", "").strip():
+            add("warn", where, "没有 sfx_en → 这一镜会没有声音")
+        if not s.get("subtitle_cn", "").strip():
+            add("warn", where, "没有 subtitle_cn → 这一镜没有字幕")
+        if not s.get("prompt_cn", "").strip():
+            add("warn", where, "没有 prompt_cn → 关键帧只能拿 beat 凑，构图会偏")
+        ref = s.get("ref") if "ref" in s else s.get("primary")
+        if ref and ref not in ids:
+            add("block", where, f"ref/primary 角色 {ref} 不存在")
+        if s.get("duration_s") and abs(s["duration_s"] - 5.2) > 0.05:
+            add("warn", where, f"duration_s={s['duration_s']} 不是 5.2（H3 每镜固定 124 帧 @24fps）")
+    total = sum(s.get("duration_s") or 0 for s in scenes)
+    if story.get("duration_s") and abs(total - story["duration_s"]) > 0.5:
+        add("warn", "story", f"各镜时长合计 {total:.1f}s 与 duration_s={story['duration_s']} 不符")
+    return problems
+
+
+def stage_lint(job: Path) -> int:
+    """剧本预检（跑在出图之前）：把"注定要废一集"的错挡在 10 秒成本处。"""
+    problems = lint_story(load(job / "story.json"))
+    for p in problems:
+        print(f"[lint] {p['level']:4s} {p['where']}: {p['message']}")
+    blocking = [p for p in problems if p["level"] == "block"]
+    print(f"[lint] {'阻断 ' + str(len(blocking)) + ' 项' if blocking else '通过'}"
+          f"（{len(problems)} 个问题）")
+    return 1 if blocking else 0
+
+
+FRAME_W, FRAME_H = 1024, 576   # 16:9，与 H3 的 640×352 比例接近
+
+
+def frame_prompt(story: dict, sc: dict, ch: dict | None) -> str:
+    """关键帧中文提示词：画面描述 + 该镜角色的造型 + 全剧风格。"""
+    parts = [sc.get("prompt_cn") or sc.get("beat", ""),
+             ch.get("desc_cn", "") if ch else "",
+             story.get("style_cn", "")]
+    return "，".join(p.strip("，。 ") for p in parts if p.strip())
+
+
+def stage_frames(job: Path) -> None:
+    """每镜出 1 张关键帧图（Z-Image 中文 t2i，10s/张）。
+
+    为什么先出图：视频一镜 210s，图一镜 10s。把"剧本/构图/人物对不对"的判断
+    从 21 分钟后提前到 1 分钟后 —— 错了重出的是图（10s），不是视频（210s）。
+    关键帧还能当 i2v 首帧（render-i2v），构图 100% 可控。
+    """
+    story = load(job / "story.json")
+    shots = load(job / "shots.json")["shots"] if (job / "shots.json").exists() else build_shots(story)
+    chars = {c["id"]: c for c in story.get("characters", [])}
+    scenes = {s["idx"]: s for s in story.get("scenes", [])}
+    (job / "frames").mkdir(parents=True, exist_ok=True)
+    client = comfy()
+    template = load(WORKFLOWS / "zimage_turbo_t2i_api.json")
+    for shot in shots:
+        dest = job / "frames" / f"{shot['idx']:02d}.png"
+        if dest.exists():
+            print(f"[frames] {dest.name} 已存在，跳过", flush=True)
+            continue
+        sc = scenes.get(shot["idx"], {})
+        ch = chars.get(shot.get("ref") or shot.get("character"))
+        prompt = frame_prompt(story, sc, ch)
+        graph = copy.deepcopy(template)
+        for node in graph.values():
+            ins = node.get("inputs", {})
+            if ins.get("text") == "__PROMPT__":
+                ins["text"] = prompt
+            if ins.get("seed") is not None:
+                ins["seed"] = SEED + shot["idx"]
+            if node.get("class_type") == "EmptySD3LatentImage":
+                ins["width"], ins["height"] = FRAME_W, FRAME_H
+        t0 = time.time()
+        files = collect(client.render(graph, max_s=900))
+        if not files:
+            raise RuntimeError(f"第 {shot['idx']} 镜关键帧没有产物")
+        client.download(files[0], dest)
+        print(f"[frames] {dest.name} {time.time()-t0:.0f}s  {prompt[:50]}…", flush=True)
+
+
+def stage_render(job: Path, first_frame: bool = False) -> None:
     """逐镜出镜（H3）。已存在的 clips/NN.mp4 跳过 = 单镜粒度续跑。
 
     两类镜走两套工作流：
@@ -268,9 +380,10 @@ def stage_render(job: Path) -> None:
     client = comfy()
     tpl_ref2va = load(WORKFLOWS / "h3_w4a8_ref2va_api.json")
     tpl_t2v = load(WORKFLOWS / "h3_w4a8_t2v_bypass_api.json")
+    tpl_i2v = load(WORKFLOWS / "h3_w4a8_i2v_bypass_api.json")
 
     refs = {}
-    for ch in story["characters"]:
+    for ch in story.get("characters", []) if not first_frame else []:
         cid = ch["id"]
         main = job / "cast" / f"{cid}.png"
         if not main.exists():
@@ -286,9 +399,15 @@ def stage_render(job: Path) -> None:
             print(f"[render] shot {idx:02d} 已存在，跳过", flush=True)
             continue
         ref = shot.get("ref")
-        r1, r2 = refs[ref] if ref else (None, None)
+        r1, r2 = refs.get(ref, (None, None)) if ref else (None, None)
+        kf_name = None
+        if first_frame:          # 关键帧当首帧：构图 100% 可控（i2v 路线）
+            kf = job / "frames" / f"{idx:02d}.png"
+            if not kf.exists():
+                raise SystemExit(f"缺少关键帧 {kf}（先跑 frames）")
+            kf_name = client.upload_image(kf)
         for attempt in range(RETRIES):
-            graph = copy.deepcopy(tpl_ref2va if ref else tpl_t2v)
+            graph = copy.deepcopy(tpl_i2v if first_frame else (tpl_ref2va if ref else tpl_t2v))
             for node in graph.values():
                 ins = node.get("inputs", {})
                 if ins.get("prompt") == "__H3_PROMPT__":
@@ -297,6 +416,8 @@ def stage_render(job: Path) -> None:
                     ins["image"] = r1
                 elif ins.get("image") == "__H3_REF_IMAGE_2__":
                     ins["image"] = r2
+                elif ins.get("image") == "__H3_FIRST_FRAME__":
+                    ins["image"] = kf_name
                 if "noise_seed" in ins:
                     ins["noise_seed"] = SEED + idx + attempt
                 if "seed" in ins and "noise_seed" not in ins:
@@ -318,6 +439,71 @@ def stage_render(job: Path) -> None:
             break
         else:
             raise SystemExit(f"第 {idx} 镜渲染失败")
+
+
+def _fresh(path: Path, deps: list[Path]) -> bool:
+    """中间件是否比它依赖的产物新（复用中间件：重出 1 镜不必重拼/重放大全片）。"""
+    if not path.exists():
+        return False
+    return all(d.exists() and d.stat().st_mtime <= path.stat().st_mtime for d in deps)
+
+
+def _sheet(images: list[Path], out: Path, cols: int = 3) -> Path | None:
+    """把若干图拼成一张对比图（ffmpeg tile）。图不足时用最后一张补齐。"""
+    if not images:
+        return None
+    rows = (len(images) + cols - 1) // cols
+    need = rows * cols
+    tmp = out.parent / f"_sheet_{out.stem}"
+    tmp.mkdir(parents=True, exist_ok=True)
+    for f in tmp.glob("*.png"):
+        f.unlink()
+    for i in range(need):
+        shutil.copyfile(images[min(i, len(images) - 1)], tmp / f"{i:02d}.png")
+    run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-framerate", "1",
+         "-pattern_type", "glob", "-i", str(tmp / "*.png"),
+         "-vf", f"tile={cols}x{rows}", "-frames:v", "1", str(out)])
+    return out
+
+
+def stage_review(job: Path) -> None:
+    """审片：关键帧行 + 视频抽帧行各拼一张图，一屏看完；并写 clips/manifest.json。
+
+    放在 render 之后、assemble 之前 —— 废镜在这里发现，重出的是一镜（210s），
+    而不是"等成片才发现第 3 镜废了"。
+    """
+    shots = load(job / "shots.json")["shots"]
+    qc = job / "qc"
+    qc.mkdir(parents=True, exist_ok=True)
+    keyframes, frames, manifest = [], [], []
+    for shot in shots:
+        idx = shot["idx"]
+        kf = job / "frames" / f"{idx:02d}.png"
+        clip = job / "clips" / f"{idx:02d}.mp4"
+        if kf.exists():
+            keyframes.append(kf)
+        if clip.exists():
+            out = qc / f"v{idx:02d}.png"
+            run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-ss", "2.5",
+                 "-i", str(clip), "-frames:v", "1", str(out)])
+            frames.append(out)
+        info = probe(clip) if clip.exists() else {}
+        manifest.append({
+            "idx": idx, "id": shot.get("id"), "ref": shot.get("ref"),
+            "prompt_en": shot.get("prompt_en"),
+            "subtitle_cn": shot.get("subtitle_cn"),
+            "seed": SEED + idx,
+            "keyframe": kf.name if kf.exists() else None,
+            "clip": clip.name if clip.exists() else None,
+            "duration_s": round(info.get("duration", 0), 2),
+            "bytes": clip.stat().st_size if clip.exists() else 0,
+        })
+    dump(job / "clips" / "manifest.json", manifest)
+    kf_sheet = _sheet(keyframes, qc / "keyframes_sheet.png")
+    vf_sheet = _sheet(frames, qc / "frames_sheet.png")
+    print(f"[review] 关键帧拼图 {kf_sheet}")
+    print(f"[review] 视频抽帧拼图 {vf_sheet}")
+    print(f"[review] 清单 → {job/'clips'/'manifest.json'}")
 
 
 def build_srt(shots: list[dict], durations: list[float]) -> str:
@@ -346,15 +532,21 @@ def stage_assemble(job: Path) -> None:
     lst = job / "clips" / "concat.txt"
     lst.write_text("".join(f"file '{c.resolve()}'\n" for c in clips), encoding="utf-8")
     concat = job / "clips" / "concat.mp4"
-    run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-f", "concat",
-         "-safe", "0", "-i", str(lst), "-c", "copy", str(concat)])
+    if _fresh(concat, clips):          # 中间件复用：重出 1 镜不必重拼全片
+        print("[assemble] concat.mp4 已是最新，复用")
+    else:
+        run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-f", "concat",
+             "-safe", "0", "-i", str(lst), "-c", "copy", str(concat)])
 
     durations = [probe(c)["duration"] for c in clips]
     (job / "subtitles.srt").write_text(build_srt(shots, durations), encoding="utf-8")
 
     up = job / "clips" / "upscaled.mp4"
-    run([sys.executable, str(H3 / "scripts" / "upscale_video.py"),
-         str(concat), str(up), "--scale", "3"])
+    if _fresh(up, [concat]):           # 同上：放大只跑一次
+        print("[assemble] upscaled.mp4 已是最新，复用")
+    else:
+        run([sys.executable, str(H3 / "scripts" / "upscale_video.py"),
+             str(concat), str(up), "--scale", "3"])
 
     style = ("FontName=Noto Sans CJK SC,FontSize=42,PrimaryColour=&H00FFFFFF,"
              "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=56,Alignment=2")
@@ -390,16 +582,14 @@ def stage_qc(job: Path) -> int:
             add("block", clip.name, f"分辨率 {info['w']}x{info['h']} != 640x352")
         if not info["audio"]:
             add("warn", clip.name, "无音轨")
+        # 一次解码同时查黑帧/静音/削波（原来跑 3 次，慢 3 倍）
         err = run([ffmpeg(), "-hide_banner", "-i", str(clip),
-                   "-vf", "blackdetect=d=0.4:pix_th=0.10", "-f", "null", "-"])
+                   "-vf", "blackdetect=d=0.4:pix_th=0.10",
+                   "-af", "silencedetect=n=-50dB:d=1.0,volumedetect", "-f", "null", "-"])
         if "black_start" in err:
             add("block", clip.name, "检出黑帧")
-        err = run([ffmpeg(), "-hide_banner", "-i", str(clip),
-                   "-af", "silencedetect=n=-50dB:d=1.0", "-f", "null", "-"])
         if "silence_start" in err:
             add("warn", clip.name, "检出静音段")
-        err = run([ffmpeg(), "-hide_banner", "-i", str(clip),
-                   "-af", "volumedetect", "-f", "null", "-"])
         m = re.search(r"max_volume:\s*(-?\d+(?:\.\d+)?) dB", err)
         if m and float(m.group(1)) > -0.3:
             # 源镜头的削波由后期 limiter 兜住，所以镜头级只提示，成片级才阻断
@@ -418,11 +608,10 @@ def stage_qc(job: Path) -> int:
         if abs(info["duration"] - want) > 0.5:
             add("warn", ep_path.name, f"成片时长 {info['duration']:.2f}s 与剧本 {want}s 偏差 > 0.5s")
         err = run([ffmpeg(), "-hide_banner", "-i", str(ep_path),
-                   "-vf", "blackdetect=d=0.4:pix_th=0.10", "-f", "null", "-"])
+                   "-vf", "blackdetect=d=0.4:pix_th=0.10",
+                   "-af", "volumedetect", "-f", "null", "-"])
         if "black_start" in err:
             add("block", ep_path.name, "成片检出黑帧")
-        err = run([ffmpeg(), "-hide_banner", "-i", str(ep_path),
-                   "-af", "volumedetect", "-f", "null", "-"])
         m = re.search(r"max_volume:\s*(-?\d+(?:\.\d+)?) dB", err)
         if m and float(m.group(1)) > -0.3:
             add("block", ep_path.name, f"成片削波 max_volume={m.group(1)} dB")
@@ -440,8 +629,18 @@ def stage_qc(job: Path) -> int:
     return 1 if report["blocking"] else 0
 
 
-STAGES = {"cast": stage_cast, "pick": stage_pick, "shots": stage_shots,
-          "render": stage_render, "assemble": stage_assemble, "qc": stage_qc}
+STAGES = {
+    "lint": stage_lint,          # 剧本预检（出图前，10 秒成本挡掉毁集级错误）
+    "cast": stage_cast,          # 定妆候选图
+    "pick": stage_pick,          # 挑图落地
+    "shots": stage_shots,        # 分镜提示词
+    "frames": stage_frames,      # 关键帧图（10s/镜，审片用；也能当 i2v 首帧）
+    "render": stage_render,      # 出镜（ref2va/t2v，文本驱动构图）
+    "render-i2v": lambda j: stage_render(j, first_frame=True),   # 出镜（关键帧首帧，构图可控）
+    "review": stage_review,      # 审片拼图 + manifest
+    "assemble": stage_assemble,  # 合成成片
+    "qc": stage_qc,              # 质检
+}
 
 
 def main(argv: list[str]) -> int:
@@ -449,7 +648,7 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     job = Path(argv[1]).expanduser().resolve()
-    stages = argv[2:] or ["shots", "render", "assemble", "qc"]
+    stages = argv[2:] or ["lint", "shots", "render", "review", "assemble", "qc"]
     for name in stages:
         if name not in STAGES:
             print(f"未知阶段 {name}；可选：{' '.join(STAGES)}", file=sys.stderr)
