@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>短剧审片台</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1b1f24;--muted:#6b7480;--line:#e3e6ea;--accent:#2f6fed;
+--ok:#0f7b45;--ok-bg:#e9f7ef;--bad:#c0392b;--bad-bg:#fdecea;--warn:#b26a00;--warn-bg:#fff6e5;--code-bg:#f2f4f7}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,"Segoe UI","Noto Sans CJK SC",sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 18px;position:sticky;top:0;z-index:10}
+h1{margin:0;font-size:16px;display:inline-block}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
+select,input,button{font:13px -apple-system,"Segoe UI","Noto Sans CJK SC",sans-serif;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:#fff}
+button{cursor:pointer}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+button.red{background:var(--bad);color:#fff;border-color:var(--bad)}
+.wrap{max-width:1400px;margin:0 auto;padding:16px 18px 60px}
+.tabs{display:flex;gap:6px;margin:14px 0}
+.tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.card h2{margin:0 0 10px;font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.shot{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.shot .th{background:#0d0f12;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer}
+.shot .th img,.shot .th video{width:100%;height:100%;object-fit:contain;display:block}
+.shot .bd{padding:8px 10px;display:flex;flex-direction:column;gap:6px;flex:1}
+.idx{font-weight:700}
+.beat{font-size:12px;color:var(--muted);line-height:1.4}
+.sub{font-size:12px;background:var(--code-bg);border-radius:4px;padding:3px 6px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tag{background:var(--code-bg);border-radius:4px;padding:1px 6px;font-size:11px}
+.tag.ok{background:var(--ok-bg);color:var(--ok)} .tag.bad{background:var(--bad-bg);color:var(--bad)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.pill{font-size:12px;padding:2px 8px;border-radius:10px;background:var(--code-bg)}
+.v-ok{background:var(--ok-bg);color:var(--ok)} .v-redo{background:var(--bad-bg);color:var(--bad)}
+.muted{color:var(--muted);font-size:12px}
+.cand{border:2px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;background:#fff}
+.cand.picked{border-color:var(--accent)}
+.cand.alt{border-color:var(--ok)}
+.cand img{width:100%;display:block}
+.cand .cap{padding:5px 7px;font-size:12px;display:flex;justify-content:space-between}
+.player{background:#000;border-radius:8px;overflow:hidden}
+.player video{width:100%;max-height:60vh;display:block}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.hide{display:none}
+.log{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted);white-space:pre-wrap}
+.lb{background:var(--code-bg);border-radius:4px;padding:2px 6px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>短剧审片台</h1>
+  <span class="muted" id="who"></span>
+  <div class="bar">
+    <select id="ep"></select>
+    <span class="pill" id="stage">—</span>
+    <span class="pill" id="prog">—</span>
+    <button onclick="location.reload()">刷新</button>
+    <button class="primary" id="save">保存决定</button>
+    <label class="muted"><input type="checkbox" id="auto" checked> 每 5 秒自动刷新</label>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button data-tab="shots" class="on">分镜审片</button>
+    <button data-tab="cast">定妆选图</button>
+    <button data-tab="ep">成片与质检</button>
+  </div>
+
+  <div id="tab-shots">
+    <div class="card">
+      <h2>逐镜审片 <span class="muted" id="shotstat"></span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <button onclick="markAll('ok')">全部通过</button>
+        <button onclick="markAll('redo')">全部重出</button>
+        <span class="muted">「重出」会删掉该镜 clip，下次 <code>render</code> 只重出它</span>
+      </div>
+      <div class="grid" id="shots"></div>
+    </div>
+  </div>
+
+  <div id="tab-cast" class="hide">
+    <div class="card">
+      <h2>定妆选图 <span class="muted">（点一张设为主图，再点一张设为备图）</span></h2>
+      <div id="cast"></div>
+    </div>
+  </div>
+
+  <div id="tab-ep" class="hide">
+    <div class="card"><h2>成片</h2><div id="player"></div></div>
+    <div class="card"><h2>质检报告</h2><div id="report"></div></div>
+    <div class="card"><h2>agent 日志</h2><div class="log" id="log"></div></div>
+  </div>
+</div>
+
+<script>
+let S=null, EP=null, tab='shots';
+const review={}, selection={};
+
+async function load(){
+  const r=await fetch('/api/state'); S=await r.json();
+  const sel=document.getElementById('ep');
+  const ids=S.episodes.map(e=>e.job);
+  if(!ids.includes(sel.value)){
+    sel.innerHTML=ids.map(j=>`<option>${j}</option>`).join('');
+    if(ids.length) sel.value=ids[0];
+  }
+  EP=S.episodes.find(e=>e.job===sel.value)||null;
+  if(!EP){document.getElementById('shots').innerHTML='<p class="muted">没有集</p>';return;}
+  // 决定
+  Object.keys(review).forEach(k=>delete review[k]);
+  Object.keys(selection).forEach(k=>delete selection[k]);
+  (EP.shots||[]).forEach(s=>{ if(s.verdict) review[String(s.idx).padStart(2,'0')]={verdict:s.verdict,note:s.note||''}; });
+  Object.entries(EP.cast||{}).forEach(([cid,v])=>{ if(v.picked&&v.picked.main) selection[cid]=v.picked; });
+  render();
+}
+
+function render(){
+  document.getElementById('who').textContent=S.series+' · '+S.root;
+  document.getElementById('stage').textContent=EP.stage;
+  document.getElementById('prog').textContent=`镜头 ${EP.clip_done}/${EP.shot_total}（${EP.pct}%）`+
+      (EP.review_done?` · 已审 ${EP.review_done}`:'')+(EP.review_pending&&EP.review_pending.length?` · 待重出 ${EP.review_pending.length}`:'');
+  renderShots(); renderCast(); renderEp();
+}
+
+function renderShots(){
+  const box=document.getElementById('shots'); const rows=EP.shots||[];
+  document.getElementById('shotstat').textContent=`（${rows.length} 镜）`;
+  box.innerHTML=rows.map(s=>{
+    const k=String(s.idx).padStart(2,'0');
+    const v=review[k]?.verdict||'';
+    const media=s.clip?`<video src="/media/${EP.job}/${s.clip}" controls preload="metadata"></video>`
+             :(s.frame?`<img src="/media/${EP.job}/${s.frame}">`:'<div class="muted" style="padding:20px">未出</div>');
+    return `<div class="shot">
+      <div class="th">${media}</div>
+      <div class="bd">
+        <div class="row"><span class="idx">${k}</span>
+          <span class="tag">${s.ref||'t2v'}</span>
+          ${s.subtitle?`<span class="sub">${esc(s.subtitle)}</span>`:''}
+          ${v?`<span class="tag ${v==='ok'?'ok':'bad'}">${v==='ok'?'通过':'重出'}</span>`:''}
+        </div>
+        <div class="beat">${esc(s.beat)}</div>
+        <div class="row">
+          <button class="ok" onclick="mark('${k}','ok')">通过</button>
+          <button class="red" onclick="mark('${k}','redo')">重出</button>
+          <input placeholder="备注" value="${esc(review[k]?.note||'')}" oninput="note('${k}',this.value)" style="flex:1;min-width:80px">
+        </div>
+      </div></div>`;
+  }).join('');
+}
+
+function renderCast(){
+  const box=document.getElementById('cast');
+  const c=EP.cast||{};
+  if(!Object.keys(c).length){box.innerHTML='<p class="muted">还没有定妆候选</p>';return;}
+  box.innerHTML=Object.entries(c).map(([cid,v])=>{
+    const p=v.picked||{};
+    return `<div class="card"><h2>${cid} ${EP.cast_picked[cid]?'<span class="tag ok">已落地</span>':'<span class="tag warn">未选</span>'}</h2>
+      <div class="grid">${v.candidates.map(f=>{
+        const isMain=p.main===f.replace(/\.png$/,''), isAlt=p.alt===f.replace(/\.png$/,'');
+        return `<div class="cand ${isMain?'picked':''} ${isAlt?'alt':''}" onclick="pick('${cid}','${f}')">
+          <img src="/media/${EP.job}/cast/${f}" loading="lazy">
+          <div class="cap"><span>${f}</span><span>${isMain?'主图':isAlt?'备图':''}</span></div></div>`;}).join('')}</div></div>`;
+  }).join('');
+}
+
+function renderEp(){
+  document.getElementById('player').innerHTML = EP.episode
+    ? `<div class="player"><video src="/media/${EP.job}/episode.mp4" controls></video></div>
+       <div class="muted">${EP.episode.w}×${EP.episode.h} · ${EP.episode.duration.toFixed(2)}s · ${(EP.episode.size/1048576).toFixed(0)}MB</div>`
+    : '<p class="muted">还没出成片</p>';
+  const r=EP.report;
+  document.getElementById('report').innerHTML = !r ? '<p class="muted">还没质检</p>' :
+    `<div class="row" style="margin-bottom:8px">
+       <span class="tag ${r.blocking?'bad':'ok'}">阻断 ${r.blocking}</span>
+       ${r.audio?`<span class="lb">${r.audio.integrated_lufs} LUFS</span><span class="lb">峰值 ${r.audio.sample_peak_dbfs} dBFS</span><span class="lb">LRA ${r.audio.lra_lu} LU</span>`:''}
+       ${r.subs?`<span class="lb">字幕 ${esc(r.subs)}</span>`:''}
+     </div>
+     <table><thead><tr><th>级别</th><th>位置</th><th>说明</th></tr></thead><tbody>
+     ${(r.findings||[]).map(f=>`<tr><td><span class="tag ${f.level==='block'?'bad':'warn'}">${f.level}</span></td><td>${esc(f.where)}</td><td>${esc(f.message)}</td></tr>`).join('')}
+     </tbody></table>`;
+  document.getElementById('log').textContent=(EP.log_tail||[]).join('\n');
+}
+
+function mark(k,v){ review[k]={...(review[k]||{}),verdict:v}; renderShots(); updateProgress(); }
+function note(k,v){ review[k]={...(review[k]||{}),note:v}; }
+function markAll(v){ (EP.shots||[]).forEach(s=>{const k=String(s.idx).padStart(2,'0');review[k]={...(review[k]||{}),verdict:v};}); renderShots(); updateProgress(); }
+function updateProgress(){
+  const done=Object.values(review).filter(v=>v.verdict==='ok').length;
+  const redo=Object.values(review).filter(v=>v.verdict==='redo').length;
+  document.getElementById('prog').textContent=`镜头 ${EP.clip_done}/${EP.shot_total}（${EP.pct}%） · 已审 ${done} · 待重出 ${redo}`;
+}
+function pick(cid,f){
+  const base=f.replace(/\.png$/,'');
+  const cur=selection[cid]||{};
+  if(cur.main===base){ delete selection[cid]; }
+  else if(!cur.main){ selection[cid]={main:base,alt:cur.alt||''}; }
+  else { selection[cid]={main:cur.main,alt:base}; }
+  renderCast();
+}
+async function save(){
+  const job=EP.job;
+  let msg='';
+  if(Object.keys(selection).length){
+    const r=await fetch('/api/selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job,selection})});
+    msg+=`选图已写 ${(await r.json()).written||''}；`;
+  }
+  if(Object.keys(review).length){
+    const r=await fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job,review})});
+    msg+=`审片决定已写 ${(await r.json()).written||''}；`;
+  }
+  const b=document.getElementById('save'); const old=b.textContent; b.textContent=msg||'没有改动'; setTimeout(()=>b.textContent=old,2500);
+}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  tab=b.dataset.tab;
+  ['shots','cast','ep'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('hide',t!==tab));
+}));
+document.getElementById('ep').addEventListener('change',load);
+document.getElementById('save').addEventListener('click',save);
+setInterval(()=>{if(document.getElementById('auto').checked) load();},5000);
+load();
+</script>
+</body>
+</html>

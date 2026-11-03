@@ -43,7 +43,20 @@ COMFY = "http://127.0.0.1:8188"
 SEED = 3013
 CANDIDATES = 3          # 每个角色出几张定妆候选
 RETRIES = 3             # 单镜失败重试上限（每次换 seed）
-DELIVERY = (1920, 1056)
+DELIVERY = (1920, 1056)          # 横屏交付（640×352 的 3×）
+# H3 原生支持竖屏（实测 352×640 出片正常）→ 竖屏应该**原生生成**，不是后期裁切。
+# 360×640 是精确 9:16，且 3× 放大正好 = 1080×1920（抖音/红果/快手的原生竖屏规格）。
+FRAME_LANDSCAPE = (640, 352)
+FRAME_PORTRAIT = (352, 640)      # H3 把宽圆整到 16 的倍数（360→352）；交付时再精确缩到 1080×1920
+DELIVERY_PORTRAIT = (1080, 1920)
+
+
+def frame_size(aspect: str) -> tuple[int, int]:
+    return FRAME_PORTRAIT if aspect == "portrait" else FRAME_LANDSCAPE
+
+
+def delivery_size(aspect: str) -> tuple[int, int]:
+    return DELIVERY_PORTRAIT if aspect == "portrait" else DELIVERY
 FPS = 24
 
 sys.path.insert(0, str(H3 / "python" / "src"))
@@ -376,6 +389,7 @@ def stage_render(job: Path, first_frame: bool = False) -> None:
     """
     story = load(job / "story.json")
     shots = load(job / "shots.json")["shots"]
+    aspect = story.get("aspect", "landscape")   # landscape | portrait（竖屏原生生成）
     (job / "clips").mkdir(parents=True, exist_ok=True)
     client = comfy()
     tpl_ref2va = load(WORKFLOWS / "h3_w4a8_ref2va_api.json")
@@ -422,6 +436,11 @@ def stage_render(job: Path, first_frame: bool = False) -> None:
                     ins["noise_seed"] = SEED + idx + attempt
                 if "seed" in ins and "noise_seed" not in ins:
                     ins["seed"] = SEED + idx + attempt
+                # 竖屏：H3 原生支持 portrait（实测 352×640 出片正常），
+                # 不必后期裁切 —— 360×640 精确 9:16，3× 放大正好 1080×1920
+                if ("width" in ins and "height" in ins
+                        and str(node.get("class_type", "")).startswith("MiniMaxH3")):
+                    ins["width"], ins["height"] = frame_size(aspect)
             t0 = time.time()
             try:
                 files = collect(client.render(graph, max_s=3600))
@@ -524,6 +543,8 @@ def stage_assemble(job: Path) -> None:
     比先烧 640×352 再放大清晰（文字边缘不糊）。
     """
     shots = load(job / "shots.json")["shots"]
+    story = load(job / "story.json")
+    aspect = story.get("aspect", "landscape")
     clips = [job / "clips" / f"{s['idx']:02d}.mp4" for s in shots]
     missing = [c.name for c in clips if not c.exists()]
     if missing:
@@ -545,11 +566,28 @@ def stage_assemble(job: Path) -> None:
     if _fresh(up, [concat]):           # 同上：放大只跑一次
         print("[assemble] upscaled.mp4 已是最新，复用")
     else:
-        run([sys.executable, str(H3 / "scripts" / "upscale_video.py"),
-             str(concat), str(up), "--scale", "3"])
+        # 竖屏：H3 把 360 圆整成 352（16 的倍数），3× = 1056×1920，不是平台规格。
+        # 直接缩到目标交付尺寸（1080×1920），2.3% 的横向拉伸看不出来。
+        dw, dh = delivery_size(aspect)
+        if aspect == "portrait":
+            run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error",
+                 "-i", str(concat), "-vf", f"scale={dw}:{dh}:flags=lanczos",
+                 "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                 "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-ar", "48000",
+                 "-b:a", "192k", str(up)])
+        else:
+            run([sys.executable, str(H3 / "scripts" / "upscale_video.py"),
+                 str(concat), str(up), "--scale", "3"])
 
-    style = ("FontName=Noto Sans CJK SC,FontSize=42,PrimaryColour=&H00FFFFFF,"
-             "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=56,Alignment=2")
+    # 字幕样式：横屏贴画面底部；竖屏要避开平台 UI（底部约 250–400px 被占），
+    # 字也要更大（竖屏手机上按画幅算）
+    if aspect == "portrait":
+        style = ("FontName=Noto Sans CJK SC,FontSize=54,PrimaryColour=&H00FFFFFF,"
+                 "OutlineColour=&H00000000,BorderStyle=3,BackColour=&H90000000,"
+                 "Outline=14,Shadow=0,MarginV=360,Alignment=2")
+    else:
+        style = ("FontName=Noto Sans CJK SC,FontSize=42,PrimaryColour=&H00FFFFFF,"
+                 "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=56,Alignment=2")
     # 统一响度 + 限幅（H3 源音轨实测可能到 0 dBFS，削波必须在这里压住）
     # 统一响度：两遍 loudnorm（先测后用）+ 前后限幅。
     # 单遍 loudnorm 实测不命中目标（要 -16 得到 -18.1），且 alimiter 默认 level=true
@@ -567,6 +605,7 @@ def stage_assemble(job: Path) -> None:
 def stage_qc(job: Path) -> int:
     """自动质检：黑帧/静音/削波/时长/分辨率/帧率/缺镜 → report.json。"""
     shots = load(job / "shots.json")["shots"]
+    aspect = load(job / "story.json").get("aspect", "landscape")
     findings: list[dict] = []
 
     def add(level, where, msg):
@@ -581,8 +620,9 @@ def stage_qc(job: Path) -> int:
         want = shot.get("duration_s") or 0
         if abs(info["duration"] - want) > 0.5:
             add("warn", clip.name, f"时长 {info['duration']:.2f}s 与剧本 {want}s 偏差 > 0.5s")
-        if (info["w"], info["h"]) != (640, 352):
-            add("block", clip.name, f"分辨率 {info['w']}x{info['h']} != 640x352")
+        if (info["w"], info["h"]) != frame_size(aspect):
+            add("block", clip.name,
+                f"分辨率 {info['w']}x{info['h']} != {frame_size(aspect)[0]}x{frame_size(aspect)[1]}")
         if not info["audio"]:
             add("warn", clip.name, "无音轨")
         # 一次解码同时查黑帧/静音/削波（原来跑 3 次，慢 3 倍）
@@ -603,8 +643,9 @@ def stage_qc(job: Path) -> int:
     if ep_path.exists():
         info = probe(ep_path)
         ep.update(info)
-        if (info["w"], info["h"]) != DELIVERY:
-            add("block", ep_path.name, f"交付分辨率 {info['w']}x{info['h']}")
+        if (info["w"], info["h"]) != delivery_size(aspect):
+            add("block", ep_path.name,
+                f"交付分辨率 {info['w']}x{info['h']} != {delivery_size(aspect)[0]}x{delivery_size(aspect)[1]}")
         if abs(info["fps"] - FPS) > 0.5:
             add("block", ep_path.name, f"帧率 {info['fps']}")
         want = sum(s.get("duration_s") or 0 for s in shots)

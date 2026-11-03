@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shortdrama import assets  # noqa: E402
+from shortdrama import assets, studio  # noqa: E402
 
 DEFAULT_DIR = assets.DEFAULT_ROOT
 
@@ -68,6 +68,28 @@ def cmd_serve(args) -> int:
     subprocess.run([sys.executable, "-m", "http.server", str(args.port),
                     "--bind", args.bind], cwd=root)
     return 0
+def cmd_studio(args) -> int:
+    root = Path(args.dir or "/home/a/ai-work/workspace/duanju").expanduser().resolve()
+    if args.status:
+        # 给 agent 在 TUI 里用：人审完了没？哪几镜要重出？
+        state = studio.series_state(root, args.series)
+        for ep in state["episodes"]:
+            if not ep.get("exists"):
+                continue
+            print(f"{ep['job']}: {ep['stage']}  镜头 {ep['clip_done']}/{ep['shot_total']}"
+                  f"  已审 {ep.get('review_done', 0)}")
+            if ep.get("review_pending"):
+                print(f"    待重出：{ep['review_pending']}")
+            if ep.get("cast"):
+                for cid, v in ep["cast"].items():
+                    p = v.get("picked") or {}
+                    mark = "✓ 已选 " + p.get("main", "") if p.get("main") else "✗ 未选"
+                    print(f"    {cid} {mark}")
+            if ep.get("report"):
+                print(f"    质检阻断 {ep['report']['blocking']} 项")
+        return 0
+    studio.serve(root, args.series, args.host, args.port)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -98,6 +120,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8092)
     p.add_argument("--bind", default="127.0.0.1")
     p.set_defaults(fn=cmd_serve)
+
+    # 审片 Web 界面（TUI 看不了图/视频，人在这里审，agent 在 TUI 里读决定）
+    p = sub.add_parser("studio", help="审片 Web 界面（选图 / 逐镜审片 / 成片）")
+    p.add_argument("dir", nargs="?", help="剧集根目录（默认 workspace/duanju）")
+    p.add_argument("--series", default="D202611_001")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8095)
+    p.add_argument("--status", action="store_true", help="只打印人已做的决定（agent 在 TUI 里用）")
+    p.set_defaults(fn=cmd_studio)
 
     args = ap.parse_args(argv)
     return args.fn(args)
