@@ -62,7 +62,7 @@ FPS = 24
 sys.path.insert(0, str(H3 / "python" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from shortdrama import facecheck, grade, loudness  # noqa: E402
+from shortdrama import bgm, facecheck, grade, loudness  # noqa: E402
 
 
 def comfy():
@@ -652,6 +652,17 @@ def stage_assemble(job: Path) -> None:
     # 单遍 loudnorm 实测不命中目标（要 -16 得到 -18.1），且 alimiter 默认 level=true
     # 会把限掉的电平又推回去 —— 那是成片削波的直接成因（链末端 -0.5 dB → AAC 后 0.0 dBFS）。
     audio_chain = loudness.audio_chain_for(up)
+    # BGM 情绪床：剧集根 assets/bgm.oga（没有就不混）
+    total_dur = sum(probe(c)["duration"] for c in clips)
+    bgm_src = job.parent / "assets" / "bgm.oga"
+    bgm_ready = None
+    if bgm_src.exists():
+        bgm_ready = job / "clips" / "bgm.m4a"
+        if not _fresh(bgm_ready, [bgm_src]):
+            bgm.prepare(bgm_src, total_dur, bgm_ready)
+        print(f"[assemble] BGM 垫底（{bgm_src.name}）")
+    else:
+        print("[assemble] 无 assets/bgm.oga，不加 BGM")
     # 系列级亮度统一：3 集平均亮度差 25%（E01=100/E02=80/E03=85），连续追剧会跳。
     vf_parts = [f"subtitles=subtitles.srt:force_style='{style}'"]
     bright = grade.measure_brightness(up)
@@ -661,12 +672,18 @@ def stage_assemble(job: Path) -> None:
         print(f"[assemble] 亮度校正 {bright:.1f} → {grade.TARGET_YAVG:.0f}（{corr}）")
     else:
         print(f"[assemble] 亮度 {bright:.1f} 已达标，不校正")
-    run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-i", str(up),
-         "-vf", ",".join(vf_parts),
-         "-af", audio_chain,
-         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-         "-r", str(FPS), "-c:a", "aac", "-ar", "48000", "-b:a", "192k",
-         "-movflags", "+faststart", str(job / "episode.mp4")], cwd=job)
+    cmd = [ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-i", str(up)]
+    if bgm_ready:
+        cmd += ["-i", str(bgm_ready)]
+        audio_chain = bgm.mix_filter(bgm_ready) + ";" + audio_chain
+    cmd += ["-vf", ",".join(vf_parts),
+            "-af", audio_chain,
+            "-map", "0:v" + (",[aout]" if bgm_ready else ""),
+            "-map", ("1:a" if bgm_ready else "0:a"),
+            "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+            "-r", str(FPS), "-c:a", "aac", "-ar", "48000", "-b:a", "192k",
+            "-movflags", "+faststart", str(job / "episode.mp4")]
+    run(cmd, cwd=job)
     print(f"[assemble] {job/'episode.mp4'} {probe(job/'episode.mp4')}")
 
 
