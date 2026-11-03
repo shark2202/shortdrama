@@ -153,7 +153,8 @@ LIMITER="alimiter=limit=0.891:attack=1:release=50:level=disabled"
 1. concat demuxer 逐样本 copy（各镜参数一致，音轨不重编码）
 2. 3x 放大（`upscale_video.py --scale 3`，lanczos）→ 1920×1056
 3. **烧字幕**（libass + Noto Sans CJK SC，白字黑边，`FontSize=42, MarginV=56`）
-4. 音频：`loudnorm=I=-16:TP=-1.5:LRA=11, alimiter=limit=0.891`（**限幅不能省**，见 §5）
+4. 音频：**两遍 loudnorm + 前后限幅**（`shortdrama/loudness.py` 的 `audio_chain_for()`）——
+   单遍不命中目标、`alimiter` 默认 `level=true` 会把限掉的电平推回去导致成片数字削波。详见 §2.7。
 5. H.264 + AAC 48kHz / CRF 18 / faststart
 
 > **与建设方案 §9.5 的唯一差异**：先放大再烧字幕（方案是先烧后放大）。
@@ -173,12 +174,14 @@ $FF -y -framerate 1 -pattern_type glob -i 'qc/f*.png' -vf tile=3x2 -frames:v 1 q
 ## 4. 质检分级（阻断 vs 提示）
 
 | 级别 | 项目 | 处置 |
+| 级别 | 项目 | 处置 |
 |---|---|---|
-| 阻断 | 交付分辨率≠1920×1056、帧率≠24、缺镜、黑帧、**成片**削波 | 必须重出/重压 |
-| 提示 | 单镜时长偏差 >0.5s、无音轨、静音段、**源镜头**削波 | 后期兜底或可接受 |
+| 阻断 | 交付分辨率≠1920×1056、帧率≠24、缺镜、黑帧、**成片样本峰值 > -1.0 dBFS** | 必须重出/重压 |
+| 提示 | 整体响度偏离 -16 LUFS 超过 1 LU、LRA > 12 LU、字幕覆盖率 < 40%、单镜时长偏差 >0.5s、无音轨、静音段、**源镜头**削波 | 后期兜底或可接受 |
 
-源镜头的削波（如本次 02/05 镜 max 0.0 dBFS）由后期 limiter 压住，成片级不再阻断。
-
+源镜头的削波（如 02/05 镜 max 0.0 dBFS）由后期 limiter 压住，成片级才阻断——判据是**成片**峰值。
+阻断阈值从 -0.3 改成 **-1.0 dBFS**：AAC 重编码有 +0.5 dB 过冲，按 -0.3 判会误报。
+完整门禁清单见 §2.7。
 ## 5. 本次实践踩到的坑
 
 1. **定妆描述遮脸 → 黑眼罩**。
