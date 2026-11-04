@@ -675,11 +675,12 @@ def stage_assemble(job: Path) -> None:
     cmd = [ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-i", str(up)]
     if bgm_ready:
         cmd += ["-i", str(bgm_ready)]
-        audio_chain = bgm.mix_filter(bgm_ready) + ";" + audio_chain
+        # 两路混音必须走 filter_complex（-af 是单输入链，装不下第二路）
+        cmd += ["-filter_complex", bgm.mix_filter(audio_chain),
+                "-map", "0:v", "-map", "[aout]"]
+    else:
+        cmd += ["-af", audio_chain, "-map", "0:v", "-map", "0:a"]
     cmd += ["-vf", ",".join(vf_parts),
-            "-af", audio_chain,
-            "-map", "0:v" + (",[aout]" if bgm_ready else ""),
-            "-map", ("1:a" if bgm_ready else "0:a"),
             "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
             "-r", str(FPS), "-c:a", "aac", "-ar", "48000", "-b:a", "192k",
             "-movflags", "+faststart", str(job / "episode.mp4")]

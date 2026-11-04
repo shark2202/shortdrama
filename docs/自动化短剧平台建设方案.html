@@ -80,6 +80,8 @@
   <a href="#now">2 · 现状盘点（本机资产）</a>
   <a href="#limits">3 · 硬约束与红线</a>
   <a href="#arch">4 · 总体架构</a>
+  <a class="sub" href="#web">4.3 Web 模式 / agent 内核</a>
+  <a class="sub" href="#cards">4.4 阶段任务卡 T0–T7</a>
   <a href="#models">5 · 本地模型与算力选型</a>
   <a href="#decisions">6 · 关键决策</a>
   <a href="#repo">7 · 系统形态与目录结构</a>
@@ -99,6 +101,7 @@
   <p>目标机器：<b>X99 · 双路 Xeon E5-2680 v4（56 线程）· 32GB RAM · RTX 2080 Ti 22GB（sm_75）· 1TB NVMe</b></p>
   <p>技术底座：<b>pi-agent（编排/Agent）</b> + <b>ComfyUI v0.33.1 + MiniMax-H3 W4A8（渲染）</b> + <b>本地 LLM（剧本）</b>，模型全部本地化</p>
   <p style="opacity:.8;font-size:13px">本方案只做「一件事」：一句话题材 → 本地出成片。全部数字标注可信度：【实测】/【推算】。</p>
+  <p style="opacity:.9;font-size:13px"><b>v2 修订（2026-11-04）</b>：按 <code>D202611_001</code> 三集实跑（横屏 3 + 竖屏 3，共 105 镜）反馈修订；形态从「CLI + 任务目录」升级为 <b>Web 模式</b>——<b>pi-agent 作为 agent 内核</b>，浏览器里管「任务 → 剧本 → 台词 → 人物/场景图 → 分段镜头 → 整集」全链路。修订点：<a href="#arch">§4.3–4.4</a> · <a href="#decisions">D18–D21</a> · <a href="#appendix">§15.7 实测数据</a>。</p>
 </header>
 
 <!-- ================= 0 ================= -->
@@ -120,32 +123,36 @@
 整条链路的<b>每一个零件本机都已经跑通过</b>（剧本除外），本方案要做的不是"从零搭平台"，而是<b>把已经跑通的六块零件按一条流水线接起来</b>，并补上缺失的那一块（剧本生成 + 编排调度）。
 </div>
 
-<h3>0.2 六个阶段（每段都有现成资产可复用）</h3>
+<h3>0.2 全链路：任务 → 剧本 → 台词 → 人物/场景图 → 分段镜头 → 整集</h3>
 <div class="flow">
-<span class="n">题材</span><span class="ar">→</span>
-<span class="n">P1 剧本 <i>本地 LLM</i></span><span class="ar">→</span>
+<span class="n">Web 建任务</span><span class="ar">→</span>
+<span class="n">P1 剧本 <i>agent+LLM</i></span><span class="ar">→</span>
 <span class="n io">story.json</span><span class="ar">→</span>
-<span class="n">P2 定妆图 <i>Z-Image</i></span><span class="ar">→</span>
+<span class="n">P2 台词/字幕 <i>agent+LLM</i></span><span class="ar">→</span>
+<span class="n io">dialogue_cn</span><span class="ar">→</span>
+<span class="n">P3 人物/场景图 <i>Z-Image</i></span><span class="ar">→</span>
 <span class="n io">cast/*.png</span><span class="ar">→</span>
-<span class="n">P3 分镜 <i>LLM</i></span><span class="ar">→</span>
-<span class="n io">shots.json</span><span class="ar">→</span>
-<span class="n">P4 出镜 <i>H3 W4A8</i></span><span class="ar">→</span>
+<span class="n">P4 分镜+关键帧 <i>Z-Image</i></span><span class="ar">→</span>
+<span class="n io">shots.json + frames/*.png</span><span class="ar">→</span>
+<span class="n">P5 分段镜头 <i>H3 W4A8</i></span><span class="ar">→</span>
 <span class="n io">clips/*.mp4</span><span class="ar">→</span>
-<span class="n">P5 后期 <i>ffmpeg</i></span><span class="ar">→</span>
+<span class="n">P6 整集 <i>ffmpeg</i></span><span class="ar">→</span>
 <span class="n out">episode.mp4</span><span class="ar">→</span>
-<span class="n">P6 质检</span>
+<span class="n">P7 质检</span>
 </div>
+<p class="k">每一格 = Web 上的一张<b>阶段任务卡</b>（§4.4）：点一下 → pi-agent 内核接单 → 产物落回 job 目录 → 网页投影刷新。全链路没有数据库、没有第二份状态（D11 / D18）。</p>
 
-<h3>0.3 三句话风险</h3>
+<h3>0.3 四句话风险</h3>
 <div class="box warn">
 <b>① 单卡显存是唯一硬瓶颈。</b>本地 LLM（13–17GB）和 H3（≈20GB）<b>不能同时驻留</b>，所以整条流水线必须<b>阶段串行</b>，不能像云上那样"边写剧本边渲染"。<br>
 <b>② 缓存加速档不可复现。</b>T8 / FirstBlockCache / TeaCache 命中会 fork 采样轨迹，同 seed 出不同画面。→ <b>草稿用缓存档，成片用 bypass 档</b>（<code>h3turing.tiers.reproducible_only()</code> 已经把这条纪律写进代码）。<br>
-<b>③ H3 的原生音轨与 latent 帧数绑定。</b>插帧能变流畅但<b>不会延长声音</b>；台词配音首版不本地化，靠字幕 + 原生环境音顶。
+<b>③ H3 的原生音轨与 latent 帧数绑定。</b>插帧能变流畅但<b>不会延长声音</b>；台词配音首版不本地化，靠字幕 + 原生环境音顶。<br>
+<b>④ 一集渲染 ≈ 2 小时的黑箱等待（v2 新增）。</b>35 镜 × 170–210s【实测】。没有 Web 看板 + 心跳日志时，人只能对着一个黑着的终端等——这正是把形态改成 Web 模式的直接原因（D18）。
 </div>
 
 <h3>0.4 不做什么（明确划界）</h3>
 <ul>
-<li><b>不做 Web 后台 / 多租户 / 数据库</b>。交付形态 = 一个 CLI + 一个任务目录 + pi-agent 里的一条 skill。理由：单机单人产线，YAGNI。</li>
+<li><b>不做多租户 / 账号体系 / 数据库</b>（v2 修订）。Web 模式只做两件事：<b>任务看板</b>（管全链路）+ <b>审片台</b>（管人的决定）；状态仍以 job 目录文件为唯一真相源，网页只是<b>投影 + 触发器</b>（D11 的延续，见 D18）。</li>
 <li><b>不做本地 TTS 训练或微调</b>。首版台词走字幕；TTS 排在 P2（见 §12 里程碑 M6）。</li>
 <li><b>不做角色 LoRA 训练</b>。一致性靠"同一张参考图反复喂入"（ref2va 路线，已实测 r=0.998）。</li>
 <li><b>不引入新的视频底模</b>（Wan / Hunyuan / CogVideoX 等）。本机只在 H3 上验证过加速路线，换底模等于从头踩坑。</li>
@@ -266,9 +273,10 @@
 
 <h3>4.1 分层图</h3>
 <div class="flow">
-<span class="n">人（选题/审片）</span><span class="ar">→</span>
-<span class="n">pi-agent 编排层</span><span class="ar">→</span>
-<span class="n">任务队列/状态机</span><span class="ar">→</span>
+<span class="n">人（浏览器：选题 / 审片 / 拍板）</span><span class="ar">→</span>
+<span class="n">Web 面板（任务看板 + 审片台）</span><span class="ar">→</span>
+<span class="n">pi-agent 内核（无头 session）</span><span class="ar">→</span>
+<span class="n">阶段执行器（episode.py / tools/）</span><span class="ar">→</span>
 <span class="n">LLM 层</span><span class="ar">→</span>
 <span class="n">渲染层 ComfyUI</span><span class="ar">→</span>
 <span class="n">后期层 ffmpeg</span><span class="ar">→</span>
@@ -279,6 +287,8 @@
 <table>
 <thead><tr><th>层</th><th>职责</th><th>实现</th><th>GPU</th></tr></thead>
 <tbody>
+<tr><td><b>Web 层</b><br><span class="tag gray">v2 新增</span></td><td>任务看板（建任务 / 看阶段进度 / 点「跑这一阶段」）+ 审片台（看关键帧与成片、写 redo/放行决定）</td><td><code>shortdrama/studio.py</code>（标准库 http.server；只读 GET 投影 + 带令牌 POST 写决定）</td><td>无</td></tr>
+<tr><td><b>Agent 内核层</b><br><span class="tag gray">v2 新增</span></td><td>接「阶段任务卡」：读 job 目录 → 按 skill 纪律执行（选档位、走显存门控、判审片结论）→ 改文件 → 回写状态与心跳</td><td>pi-agent 无头 session（<code>pi --print --mode json</code> / 子进程 <code>pi -p</code>）</td><td>无</td></tr>
 <tr><td><b>编排层</b></td><td>把"一句话"翻译成一串阶段任务；驱动 LLM、监控渲染、汇总报告</td><td>pi-agent（skill + <code>pi --print</code> / <code>--mode json</code> 无头调用）</td><td>无</td></tr>
 <tr><td><b>调度层</b></td><td>任务目录 / 状态机 / 断点续跑 / 显存门控 / 重试</td><td>新写：<code>sd</code> CLI（文件型 job 目录，<b>不引数据库</b>）</td><td>无</td></tr>
 <tr><td><b>LLM 层</b></td><td>剧本、分镜、台词、字幕</td><td>抽象层 <code>llm.py</code>：本地 llama.cpp <code>:8080</code> 优先 → 云 API（minimax/moyu）兜底</td><td>占 13–17GB，<b>与渲染互斥</b></td></tr>
@@ -309,6 +319,44 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 <b>②</b> 本地 LLM 用 llama.cpp 时显存吃 13–17GB，<b>可以只用 CPU 模式跑剧本</b>（<code>-ngl 0</code>，但只有 1.5–2.5 tok/s，仅在短 prompt 时用）；
 <b>③</b> 剧本质量不达标时切云 API（minimax/moyu 已配好 key），GPU 完全空出来给渲染 —— <b>这是最省事的方案</b>，代价是剧本这一步不"完全本地"。<br>
 <b>默认策略：</b>本地 LLM 优先，出片前<b>保证</b>显存干净（调度层强制门控，见 §10.2）。
+</div>
+
+<h3 id="web">4.3 Web 模式：pi-agent 作为 agent 内核（v2 核心）</h3>
+<p class="sub">v1 把交付形态定为「CLI + 任务目录」。三集实跑后改判：<b>单集 2 小时的渲染等待 + 人在环审片，让终端成了最差的操作面</b>（pi 的 TUI 看不到图、看不到视频）。v2 改为：<b>浏览器是唯一操作面，pi-agent 是唯一执行内核，job 目录仍是唯一真相源</b>。</p>
+
+<table>
+<thead><tr><th>角色</th><th>干什么</th><th>不干什么</th><th>实现</th></tr></thead>
+<tbody>
+<tr><td><b>人</b></td><td>选题、拍板（挑定妆图 / 判镜头 redo）、看成片</td><td>不写命令行，不手改 JSON</td><td>浏览器（PC / 手机都行）</td></tr>
+<tr><td><b>Web 面板</b></td><td>建任务、列阶段、显示进度与产物、写决定</td><td><b>不执行任何 GPU / ffmpeg 动作</b>，不存第二份状态</td><td><code>shortdrama/studio.py</code>（标准库 http.server；只读 GET 投影 + 带令牌 POST 写决定）</td></tr>
+<tr><td><b>pi-agent 内核</b></td><td>接「阶段任务卡」：读 job 目录 → 按 skill 里的纪律执行（选档位、走显存门控、判审片结论）→ 改文件 → 回写状态与心跳</td><td>不引数据库，不另立状态，不越权改渲染产物</td><td>pi 无头 session（<code>pi --print --mode json</code>）</td></tr>
+<tr><td><b>阶段执行器</b></td><td>确定性动作：出图 / 出镜 / 拼接 / 烧字幕 / 质检</td><td>不做内容决策</td><td><code>shortdrama/episode.py</code>（+ <code>tools/*.py</code>）</td></tr>
+</tbody>
+</table>
+
+<div class="box info">
+<b>为什么不让网页直接调 ComfyUI / ffmpeg：</b>那等于把三个月踩出来的纪律（成片只用可复现档、显存门控、关键帧先行、物镜走 t2v、逐镜归一 + 两遍 loudnorm + limiter 关自动电平）用另一种语言<b>重新实现一遍</b>，并且立刻长出第二套状态。agent 内核 + 现有 CLI = <b>纪律只有一份，网页只是它的遥控器</b>。
+</div>
+
+<h3 id="cards">4.4 阶段任务卡（任务 → 剧本 → 台词 → 人物/场景图 → 分段镜头 → 整集）</h3>
+<p class="sub">每张卡 = 一个 Web 按钮 + 一份落在 job 目录里的产物 + 一个验收口径。卡与卡之间只靠<b>文件</b>衔接，所以任何一张都能单独重跑（D11 / §10.3）。</p>
+
+<table>
+<thead><tr><th>卡</th><th>触发者</th><th>输入</th><th>产物</th><th>验收口径</th><th>失败怎么办</th></tr></thead>
+<tbody>
+<tr><td><b>T0 建任务</b></td><td>人（Web 表单）</td><td>题材 / 集数 / 时长 / 画幅</td><td><code>series_outline.json</code> + 一集一个 job 目录</td><td>目录齐、schema 可解析</td><td>表单校验，不入库</td></tr>
+<tr><td><b>T1 剧本</b></td><td>agent</td><td>题材 + 分集大纲</td><td><code>story.json</code>（中英双轨 + 每镜 <code>ref</code> 声明）</td><td><code>lint</code> 无 block：prompt_en 非空且无中文、idx 连续、角色引用存在</td><td>带错误重试 ≤2 次；仍失败就人工改 JSON（Web 可编辑）</td></tr>
+<tr><td><b>T2 台词/字幕</b></td><td>agent</td><td><code>story.json</code></td><td>每镜 <code>dialogue_cn</code> / <code>subtitle_cn</code></td><td>有效字幕覆盖率 ≥ 40%；<b>有效字幕与台词分开算</b>，两者都 &lt;15% 才告警</td><td>LLM 留空时<b>合并而非覆盖</b>回退已有字幕（R15）</td></tr>
+<tr><td><b>T3 人物/场景图</b></td><td>agent 出图 + 人挑</td><td>角色身份锚点 + 造型</td><td><code>cast/&lt;id&gt;_cand*.png</code> → 选定 <code>cast/&lt;id&gt;.png</code> + <code>_alt.png</code></td><td>脸型/性别/年龄与设定一致（<code>facecheck</code>）</td><td>重出候选；备图用 i2i 派生</td></tr>
+<tr><td><b>T4 分镜 + 关键帧</b></td><td>agent</td><td><code>story.json</code></td><td><code>shots.json</code> + <code>frames/NN.png</code></td><td>关键帧拼图一屏审片（D20）</td><td>改图 10s ≪ 改视频 210s</td></tr>
+<tr><td><b>T5 分段镜头</b></td><td>agent（GPU）</td><td><code>shots.json</code> + <code>cast/</code></td><td><code>clips/NN.mp4</code>（单镜粒度续跑）</td><td>每镜 5.17s / 640×352 / 有音轨 / 非黑帧</td><td>单镜重试 ≤3 且换 seed；失败镜标 redo 等人重出</td></tr>
+<tr><td><b>T6 整集</b></td><td>agent（CPU）</td><td><code>clips/</code> + <code>shots.json</code></td><td><code>episode.mp4</code> + <code>subtitles.srt</code></td><td>1920×1056 / 24fps / I=-16 LUFS±1 / 峰值 ≤ -1.0 dBFS / LRA ≤ 12</td><td>回 T5 只重出问题镜</td></tr>
+<tr><td><b>T7 质检</b></td><td>agent</td><td>成片 + 源镜</td><td><code>report.json</code> + <code>qc/review.md</code></td><td>blocking = 0</td><td>阻断项按 <code>where</code> 指回具体镜</td></tr>
+</tbody>
+</table>
+
+<div class="box tip">
+<b>进度可见性（v2 硬要求）：</b>每个阶段执行器必须往 <code>logs/run.log</code> 追加心跳行（如 <code>[render] shot 17 → 17.mp4 190s</code>），Web 面板直接读这个尾巴投影进度。<b>没有心跳的阶段在 Web 上就等于"卡死"</b>，人只能猜。
 </div>
 </section>
 
@@ -367,13 +415,17 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 <tr><td>D6</td><td>剧本走本地 27B，云 API 只做兜底</td><td>本机已装好、45–48 tok/s、零外网依赖；但 Q2 量化下的剧本质量要 M2 实测才知道，兜底通道必须先建好</td><td>完全本地化（当前约束下不成立）</td></tr>
 <tr><td>D7</td><td>首版不做本地 TTS，台词用字幕 + 原生环境音</td><td>本机<b>没有任何 TTS 权重</b>；H3 原生音频只有环境音，没有台词；引入 TTS 要单独占显存窗口且需装新模型</td><td>有声短剧（首版形态：<b>漫剧 / 动态漫</b>）</td></tr>
 <tr><td>D8</td><td>编排用 pi-agent，不自造 agent 框架</td><td>pi 已配 5 个 provider、装好 skills / subagents / workflows 扩展；<code>pi --print</code> 可无头驱动</td><td>自建 LLM 调用循环</td></tr>
-<tr><td>D9</td><td>交付形态 = CLI + 任务目录，不做 Web 后台</td><td>单人单机产线；pi-agent 的 TUI 已经能当"操作界面"</td><td>Web 控制台、账号体系</td></tr>
+<tr><td>D9</td><td><b>（v1 决策，已被 D18 修订）</b>交付形态 = CLI + 任务目录，"pi-agent 的 TUI 就是操作界面"</td><td>单人单机产线。实跑<b>证伪</b>：TUI 显示不了图片和视频，而审片/看片恰恰是本产线的核心动作，"终端当界面"只在写代码阶段成立</td><td>—</td></tr>
 <tr><td>D10</td><td>1080p 交付用重采样，不用 ML 超分</td><td>本机无放大模型权重，<code>nvidia-vfx</code> 需 TensorRT 装不上，静态 ffmpeg 无 CUDA 滤镜</td><td>真超分清晰度</td></tr>
 <tr><td>D11</td><td>资产可见性 = 只读静态页（清单 JSON + 生成的 HTML），不做资产数据库 / 写操作后台</td><td>D9 的延伸：产物天然在文件系统里，再引入数据库就会出现"第二个真相源"，与 §8.3「文件即状态、断点续跑靠目录」冲突；审片 / 挑图的选择写回 job 目录里的文件即可</td><td>资产标签 / 检索 / 多端同步</td></tr>
 <tr><td>D12</td><td>画面里不出现需要观众读懂的文字；可读信息一律走字幕</td><td>H3 / Z-Image 都不认字形，画出来的字必是乱码（实测：照片上的日期、监控时间戳、照片背面的手写尾钩全部废掉）。保留"这里有行字"的质感但标明不可辨认，观众要读的内容由后期 ffmpeg 烧字幕（永远正确）</td><td>画面内文字（日期牌 / 招牌 / 屏幕 UI）</td></tr>
 <tr><td>D13</td><td>镜内无角色时走纯 t2v 工作流，不带参考图</td><td>ref2va 会把提示词强制改成 "&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character."，于是照片背面特写 / 监控回放 / 鞋尖滴水这类物镜也会被塞两张角色脸 → H3 去画人而不是画那个东西。每镜显式声明 <code>ref</code>（角色 id 或 null）</td><td>统一的单工作流（省事但物镜全废）</td></tr>
 <tr><td>D16</td><td>竖屏是**原生生成**（H3 工作流的 width/height），不是后期裁切</td><td>实测 H3 支持 portrait（352×640 出片正常，构图与 ref2va 一致性都没问题），满屏 1080×1920 无留黑；后期裁切只能保留 31% 宽度（11 个全景镜会废），或留黑 69%（画面只占 31% 屏）。本机 ffmpeg 静态构建无 drawtext，竖屏标题条与字幕条统一走 libass（一个 .ass）</td><td>横屏母版（后期裁切/留黑）</td></tr>
 <tr><td>D17</td><td>审片走本地 Web 界面（审片台），agent 在 TUI 里读人的决定</td><td>pi-agent 的 TUI <b>不能显示图片和视频</b>，而方案 §11.2 说真正的瓶颈是人工审片。审片台只读文件、写决定文件（cast/selection.json、review.json），不引数据库（D11 的延续）；「重出」= 删掉该镜 clip，下次 render 只重出这一镜</td><td>没有审片界面（靠传文件 + 口头描述）</td></tr>
+<tr><td>D18</td><td><b>Web 模式：浏览器是唯一操作面，pi-agent 是唯一执行内核</b></td><td>实跑：单集渲染 ≈ 2 小时、审片要人看图看视频，而 pi 的 TUI 两者都做不到；人守着黑终端的体验就是"任务没完成"的来源。Web 面板只做<b>投影 + 触发</b>，不碰 GPU/ffmpeg（纪律只有一份，见 §4.3）</td><td>纯 CLI 交付（D9 v1）· 网页直连 ComfyUI</td></tr>
+<tr><td>D19</td><td><b>台词/字幕单列一个阶段，且是主信息通道</b></td><td>实跑：初版 3 集共 105 镜，<b>对白只有 2/7/7 条</b>——纯动作流的剧本让观众三分钟读不到信息（短剧是听觉媒介）。补台词后 30/31/32 镜（88%）。关键教训：<b>哪些镜该有台词由代码决定，LLM 只负责写内容，且合并而非覆盖</b>（第一版让 LLM 自选镜位 → 它理解成"全部留空"，还覆盖掉已有好字幕）</td><td>把台词当剧本附属品</td></tr>
+<tr><td>D20</td><td><b>关键帧先行：先审图（10s/张），再烧视频（210s/镜）</b></td><td>实跑 105 镜：构图/人物/光线对不对，用一张 10s 的图就能判断；用视频判断要 210s。审片成本差 20 倍</td><td>渲完再审（D17 v1 的做法）</td></tr>
+<tr><td>D21</td><td><b>后期三件套一起上：逐镜响度归一 + 系列级亮度统一 + BGM 情绪床</b></td><td>实跑：H3 每镜原生音轨响度差 8–20dB → 逐镜对齐到 -20 LUFS 后整片 LRA 从 20.8 降到 7.4；三集平均亮度差 25%（E01 94.6 / E02 100.6 / E03 82.0 → 统一到 90）；BGM（CC BY 4.0，署名随片）垫底把"环境音太干"补上</td><td>只做整片归一（会把动态压扁）· 不做 BGM</td></tr>
 <tr><td>D15</td><td>成片响度按 EBU R128 交付：I = -16 LUFS ±1、峰值 ≤ -1.0 dBFS、LRA ≤ 12 LU</td><td>短剧在手机外放播放，响度必须可预期（集与集一致才不掉完播）；LRA 20+ 的"电影感"动态范围在手机外放会忽大忽小。实现上必须<b>两遍 loudnorm</b>（单遍实测要 -16 只得到 -18.1，且 LRA 目标不生效）且 <code>alimiter</code> 必须写 <code>level=disabled</code>（默认自动电平会把限掉的电平推回去，叠加 AAC +0.5 dB 过冲即数字削波）</td><td>响度不设标准（各集音量忽大忽小）</td></tr>
 <tr><td>D14</td><td>定妆图提示词 = 身份锚点 + 造型 + 中性光后缀；风格词不进</td><td>① 风格词（霓虹洋红 / 低照度 / 胶片颗粒）会覆盖"中性柔光、纯灰背景"，模型顺势出美颜网红脸，且带色光污染 ref2va 参考图；② 不给性别 / 年龄 / 人种，Z-Image 默认出男性（实测三个角色全出成男的）→ 身份锚点独立成字段并硬性校验</td><td>好看的通用定妆照（但锁不住人脸）</td></tr>
 </tbody>
@@ -390,38 +442,59 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 </div>
 
 <pre><code>/home/a/ai-work/workspace/shortdrama/
-├── README.md                 # 一页说明 + 常用命令
-├── sd                       # 主 CLI 入口（bash 或 python 均可，本方案用 python3）
+/home/a/ai-work/workspace/shortdrama/     # 平台代码（薄编排层，不改既有三个仓库）
+├── sd                       # 主 CLI 入口（assets / serve / …）
 ├── shortdrama/
-│   ├── llm.py                # LLM 抽象层：本地 llama.cpp → 云兜底，统一 chat() 接口
-│   ├── story.py              # P1：题材 → story.json（schema 校验 + 重试）
-│   ├── shots.py              # P3：story → shots.json（英文提示词 + 参考图索引）
-│   ├── cast.py               # P2：定妆图生成/挑选（Z-Image t2i/i2i/CN）
-│   ├── render.py             # P4：分镜 → clips/*.mp4（调 h3turing client + tier）
-│   ├── assemble.py           # P5：ffmpeg 拼接 / 字幕 / 音量 / 1080p
-│   ├── qc.py                 # P6：自动质检 → report.json
-│   ├── job.py                # 任务目录、状态机、断点续跑、重试
-│   ├── gate.py               # 显存门控（等 ComfyUI 空闲、LLM 腾空显存）
-│   ├── config.py             # 唯一配置文件（路径、档位、端口、超时）
-│   └── assets.py             # 资产清单 + 只读静态页（已有）
-├── prompts/                  # 提示词模板（剧本 / 分镜 / 字幕）
-├── jobs/                     # 任务目录（每个一集一个子目录）
-└── logs/</code></pre>
+│   ├── episode.py            # 一集驱动：lint cast pick shots frames render review assemble qc
+│   ├── studio.py             # Web 面板：任务看板 + 审片台（D17 / D18）
+│   ├── bgm.py                # BGM 情绪床（准备 + 混音滤镜）
+│   ├── grade.py              # 亮度测量与校正（系列级统一）
+│   ├── loudness.py           # 两遍 loudnorm + 限幅链
+│   ├── vertical.py           # 竖屏派生（平行 job 目录，零代码改动）
+│   ├── facecheck.py          # 角色脸型 / 性别 / 年龄校验
+│   ├── textcheck.py          # 画面内可读文字拦截（D12）
+│   ├── tview.py              # 终端看图（无网时的降级审片路径）
+│   └── assets.py             # 资产清单 + 只读静态页
+├── tools/                    # 内容侧脚本（agent 调用）
+│   ├── polish.py             # 题材 → 分集大纲 → story.json（LLM）
+│   ├── add_dialogue.py       # 台词 / 字幕补写（D19：代码选镜，LLM 只写字）
+│   ├── apply_subtitles.py    # 人工确认后写回 subtitle_cn
+│   ├── set_refs.py           # 逐镜标注 ref（人物镜 / 物镜）
+│   ├── fix_characters.py     # 角色描述去歧义 + traits_en（R17）
+│   ├── make_portrait_jobs.py # 横屏 → 竖屏平行任务目录
+│   └── mark_redo.py          # 把某镜标记为重出
+├── prompts/                  # 提示词模板（剧本 / 台词 / 出图）
+├── docs/                     # 本建设方案 + SOP-短剧生产.md
+├── skills/shortdrama-production/   # pi-agent skill（软链到 ~/.pi/agent/skills/）
+└── logs/
+
+/home/a/ai-work/duanju/                # 剧集工程（产物即状态，独立 git 仓库）
+├── D202611_001_E01/         # 一集一个目录（横屏 1920×1056）
+│   ├── story.json  shots.json  cast→  frames/  clips/  episode.mp4
+│   ├── subtitles.srt  report.json  qc/  logs/
+├── D202611_001_E01_P/       # 同一集的竖屏版 1080×1920（平行目录，零代码改动）
+├── cast/                    # 全剧共用定妆图（3 集共用 → 跨集不换脸）
+├── assets/bgm.oga           # BGM 情绪床 + CREDITS（署名随片）
+└── series_outline.json      # 分集大纲（T0 产出）</code></pre>
+
+<div class="box info">
+<b>v1 → v2 的模块调整（实跑结果）：</b>原计划的 <code>llm.py / story.py / shots.py / cast.py / render.py / assemble.py / qc.py / job.py / gate.py / config.py</code> 十个模块<b>合并成 <code>episode.py</code> 单文件驱动 + <code>tools/</code> 内容脚本</b>。理由：这些阶段共享同一份 story/shots/clip 上下文（改一句台词要同时影响分镜、SRT、质检），拆文件只是把上下文切开、换来十个 import。代价是单文件偏大；收益是<b>一个 job 目录一次跑通、agent 只需记一条命令</b>。任务目录也从 <code>shortdrama/jobs/</code> 挪到 <code>/home/a/ai-work/duanju/</code>（产物大、迭代快，独立 git 仓库更干净）。
+</div>
 
 <h3>7.2 复用关系（不重复造轮子）</h3>
 <table>
 <thead><tr><th>新模块</th><th>复用的既有资产</th><th>新增代码量估计</th></tr></thead>
 <tbody>
-<tr><td><code>render.py</code></td><td><code>h3turing.client.ComfyUI</code>（重试/轮询/上传/下载）· <code>tiers</code> · <code>workflows</code> · <code>scripts/shortvideo.py</code> 的多镜循环</td><td>≈ 150 行</td></tr>
-<tr><td><code>cast.py</code></td><td><code>workflows/api/zimage_turbo_t2i_api.json</code> / <code>zimage_turbo_i2i_api.json</code> / <code>zimage_turbo_cn_api.json</code> · <code>scripts/zimage_to_h3.py</code></td><td>≈ 120 行</td></tr>
-<tr><td><code>assemble.py</code></td><td><code>scripts/shortvideo.py</code> 的 concat 段 · <code>scripts/upscale_video.py</code> · imageio-ffmpeg</td><td>≈ 180 行</td></tr>
-<tr><td><code>llm.py</code></td><td>OpenAI 兼容端点（<code>http://127.0.0.1:8080/v1</code>）· pi 已配 provider</td><td>≈ 80 行</td></tr>
-<tr><td><code>story.py</code> / <code>shots.py</code></td><td>提示词模板 + JSON schema 校验（标准库 <code>json</code> + 手写校验，<b>不引 pydantic</b>）</td><td>≈ 200 行</td></tr>
-<tr><td><code>job.py</code> / <code>gate.py</code> / <code>qc.py</code></td><td><code>urllib</code> / <code>subprocess</code> / <code>nvidia-smi</code> / <code>ffprobe</code></td><td>≈ 250 行</td></tr>
+<tr><td><code>episode.py</code><br><span class="k">render / assemble / qc / frames / review / cast / shots</span></td><td><code>h3turing.client.ComfyUI</code>（重试/轮询/上传/下载）· <code>tiers</code> · <code>workflows</code> · <code>scripts/upscale_video.py</code></td><td>823 行（实测）</td></tr>
+<tr><td><code>studio.py</code><br><span class="k">Web 面板（任务看板 + 审片台）</span></td><td>标准库 <code>http.server</code>（<b>不引 web 框架</b>）；媒体接口支持 HTTP Range（审片要能拖进度条）</td><td>383 行（实测）</td></tr>
+<tr><td><code>tools/polish.py</code> + <code>tools/add_dialogue.py</code><br><span class="k">剧本 / 台词</span></td><td>OpenAI 兼容端点（<code>http://127.0.0.1:8080/v1</code>）· 手写 JSON schema 校验（标准库 <code>json</code>，<b>不引 pydantic</b>）</td><td>494 行（实测）</td></tr>
+<tr><td><code>bgm.py</code> / <code>grade.py</code> / <code>loudness.py</code><br><span class="k">后期三件套</span></td><td>imageio-ffmpeg（本机静态构建，<b>独立 venv，不碰 ComfyUI 的 pip</b>）</td><td>258 行（实测）</td></tr>
+<tr><td><code>facecheck.py</code> / <code>textcheck.py</code> / <code>vertical.py</code> / <code>tview.py</code></td><td>纯标准库</td><td>413 行（实测）</td></tr>
+<tr><td><code>assets.py</code></td><td>静态页生成</td><td>261 行（实测）</td></tr>
 </tbody>
 </table>
 <div class="k">
-预估新增代码 <b>≈ 1000 行</b>（<code>render.py</code> 与 <code>assemble.py</code> 里大部分是搬现有脚本的逻辑）。这个体量对应 <b>3–4 人日</b>，不是"搭平台"的量级。
+实测新增代码 <b>≈ 3400 行</b>（<code>shortdrama/</code> 2545 行 + <code>tools/</code> 约 900 行；v1 预估 1000 行，<b>低估在后期链与审片界面</b>）。对应 <b>≈ 8–10 人日</b>，量级仍然是"薄编排层"，不是"搭平台"。
 </div>
 
 <h3>7.3 pi-agent 侧交付物</h3>
@@ -431,6 +504,7 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 <tr><td>Skill</td><td><code>~/.pi/agent/skills/shortdrama/SKILL.md</code>：描述"怎么从一句话到成片"，指向 <code>shortdrama/</code> 的 CLI 与 prompt 模板</td><td>在 pi 里说"做个短剧：竹林雨夜，红衣女剑客"就能触发</td></tr>
 <tr><td>无头调用</td><td><code>pi --print --model llama-local:qwen38-27b-lynstyle "…"</code></td><td>批处理/定时任务（<code>--mode json</code> 出事件流）</td></tr>
 <tr><td>工作流</td><td>用 pi 的 <code>workflow</code> 把"批量 10 集"扇出为并行子任务（注意：<b>渲染仍串行</b>，并行只发生在 LLM/质检这类 CPU 阶段）</td><td>批量生产</td></tr>
+<tr><td><b>Web → agent 触发</b><br><span class="tag gray">v2 新增</span></td><td>Web 面板「跑这一阶段」→ 后端起一个 <b>pi 无头 session</b>（<code>pi --print --mode json</code>，cwd = job 目录，提示词 = 阶段任务卡）→ agent 调 <code>episode.py</code> / <code>tools/</code> → 产物落 job 目录 → 网页轮询刷新</td><td>把 §4.4 的阶段任务卡变成按钮；agent 仍是唯一执行者，纪律不散</td></tr>
 </tbody>
 </table>
 </section>
@@ -438,143 +512,185 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 <!-- ================= 8 ================= -->
 <section id="schema">
 <h2>8 · 数据契约</h2>
-<p class="sub">三个 JSON 是整条链路的骨架。中间件越少越好，所以只有这三份。</p>
+<p class="sub">v2：JSON 契约从"三个"变成"两个 + 一个目录"。<code>story.json</code>（人可改的剧本/台词）与 <code>shots.json</code>（喂渲染的定稿）之外，<b>状态不再单独存 <code>job.json</code></b>——目录本身就是状态机（D11）。</p>
 
-<h3>8.1 <code>story.json</code>（P1 产出，人可改）</h3>
+<h3>8.1 <code>story.json</code>（P1 剧本 + P2 台词，人可改）</h3>
 <pre><code>{
-  "title": "竹林雨夜·第三更",
-  "genre": "古装悬疑",
+  "title": "凌晨三点的便利店",
+  "genre": "都市悬疑",
+  "aspect": "landscape",              // landscape | portrait（竖屏是原生生成，不是裁切）
   "style_cn": "电影感，浅景深，冷调高对比，胶片颗粒",
   "style_en": "cinematic, shallow depth of field, cold teal high contrast, film grain",
-  "duration_s": 60,
-  "shot_count": 12,
+  "duration_s": 180.93,
+  "shot_count": 35,
   "characters": [
-    {"id": "c1", "name": "阿棠", "desc_cn": "红衣女剑客，长黑发，左颊有疤",
-     "ref_image": "cast/c1.png", "voice": "女声偏低"}
+    {"id": "c1", "name": "林晚",
+     "desc_cn": "24 岁，便利店店员，蓝色制服袖子卷过肘，不对称刘海",
+     "traits_en": "a woman in her mid-twenties with a long face and asymmetric bangs",
+     "ref_image": "cast/c1.png"}
   ],
   "scenes": [
-    {"id": "s1", "idx": 1, "chars": ["c1"], "beat": "开场：雨夜竹林，人物背影",
-     "duration_s": 5.2, "shot_type": "wide",
-     "prompt_en": "&lt;Picture 1&gt; shows the same character. ...",
-     "dialogue_cn": "有人跟着我。", "subtitle_cn": "有人跟着我。",
-     "sfx": "雨打竹叶，远处雷声"}
+    {"id": "s1", "idx": 1, "chars": ["c1"], "ref": "c1",       // ref=null → 物镜走 t2v
+     "beat": "钩子。旧照片特写，女孩在笑，右下角烧焦卷曲",
+     "duration_s": 5.17, "shot_type": "wide",
+     "prompt_cn": "旧照片特写，女孩在笑，白墙背景，右下角烧焦卷曲",
+     "prompt_en": "An old tilted photograph of a young woman smiling ...",
+     "dialogue_cn": "……是我。", "subtitle_cn": "……是我。",
+     "sfx": "灯管电流声", "sfx_en": "low fluorescent tube hum"}
   ],
-  "ending": "悬念收尾，不揭示凶手"
+  "ending": "悬念收尾，不揭示照片真相"
 }</code></pre>
 <div class="k">
-<b>关键设计：</b><code>prompt_en</code> 与中文并存 —— 中文给人看（审稿/字幕），英文喂 H3（它的文本编码器是英文的）。<b>两套语言不许混用</b>：中文直接喂 H3 效果差。
+<b>关键设计：</b><code>prompt_en</code> 与中文并存 —— 中文给人看（审稿/字幕/出图），英文喂 H3（它的文本编码器是英文的）。<b>两套语言不许混用</b>：中文直接喂 H3 效果差。<br>
+<b>每镜必须显式写 <code>ref</code></b>（角色 id 或 null）——ref2va 会强制加 "show the same character"，物镜被塞两张脸就会去画人（D13）。<br>
+<b><code>traits_en</code> 是 v2 补的字段</b>：ref2va 只靠参考图会漂（实测把女角色渲成年轻男性），英文特征词必须进每镜提示词（R17）。
 </div>
 
-<h3>8.2 <code>shots.json</code>（P3 产出 = 现有 <code>shortvideo.py</code> 的输入格式）</h3>
-<pre><code>[
-  "&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. She stands alone among tall bamboo stalks ...",
-  "&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. She walks slowly away from camera ..."
-]</code></pre>
+<h3>8.2 <code>shots.json</code>（P4 产出：喂渲染的定稿）</h3>
+<pre><code>{
+  "shots": [
+    {"idx": 1, "id": "s1", "ref": "c1",
+     "prompt_en": "&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. …, cinematic …, natural ambient audio: …",
+     "subtitle_cn": "2025.1.15", "dialogue_cn": "",
+     "sfx_en": "near silence", "duration_s": 5.17,
+     "beat_cn": "钩子。旧照片特写…"}
+  ]
+}</code></pre>
 <div class="k">
-这是<b>已存在的格式</b>（<code>h3_ab/shortvideo/shots.json</code> 就是它），所以渲染层零改造成本。<b>不要发明新格式。</b>
+v1 设想的是"字符串数组"（沿用 <code>shortvideo.py</code> 格式），<b>实跑后改成对象</b>：分镜要带 <code>subtitle_cn</code> / <code>dialogue_cn</code> / <code>ref</code> / <code>idx</code>，后期、质检、审片表全都要用。<b>渲染层仍只取 <code>prompt_en</code> + <code>ref</code>，格式兼容没有破坏。</b><br>
+<b>台词写在 story.json、烧录读 shots.json</b>：改台词 = 改 story → 重跑 shots（纯文本，秒级）→ 重跑 assemble（1.5 分钟），<b>不用重渲</b>。
 </div>
 
-<h3>8.3 任务目录 <code>jobs/&lt;job-id&gt;/</code>（调度层唯一状态）</h3>
-<pre><code>jobs/20261102-1435-bamboo/
-├── job.json           # 状态机：stage/status/seed/tier/错误/重试次数
-├── story.json         # P1 产物
-├── shots.json         # P3 产物
-├── cast/              # P2 产物：c1.png / c1_alt.png / …
-├── clips/             # P4 产物：01.mp4 … 12.mp4（每镜一个文件）
-├── episode.mp4        # P5 产物（交付物）
-├── subtitles.srt      # P5 产物
-├── report.json        # P6 产物：质检结果
-├── timing.json        # 每阶段耗时（冷/热分开）
-└── logs/              # stdout/stderr 全量留存</code></pre>
 
-<h3>8.4 状态机</h3>
-<pre><code>PENDING → STORY → CAST → SHOTS → RENDER → ASSEMBLE → QC → DONE
-                        ↑___________ 任意一步失败 → RETRY(≤3) → FAILED
-RENDER 内部逐镜：shot_01 … shot_12，每镜独立记录状态（断点续跑粒度 = 单镜）</code></pre>
+<h3>8.3 任务目录（唯一状态：目录即状态机）</h3>
+<pre><code>/home/a/ai-work/duanju/D202611_001_E01/
+├── story.json         # P1+P2 产物（剧本 + 台词，人可改）
+├── shots.json         # P4 产物（喂渲染的定稿）
+├── cast -> ../cast    # P3 定妆图（全剧共用，软链 → 跨集不换脸）
+├── frames/            # P4 关键帧 NN.png（审片先行）
+├── clips/             # P5 逐镜产物
+│   ├── 01.mp4 … 35.mp4
+│   ├── norm/          # 逐镜响度归一后的中间件
+│   ├── concat.mp4     # 拼接中间件
+│   ├── upscaled.mp4   # 3× 放大中间件（横屏）
+│   ├── bgm.m4a        # BGM 情绪床（本地缓存）
+│   └── manifest.json  # 每镜的 prompt / seed / 时长 / 关键帧
+├── episode.mp4        # P6 整集（交付物）
+├── subtitles.srt      # P6 字幕（时间码按实际每镜时长排）
+├── report.json        # P7 质检（机器读，blocking 非空即阻断）
+├── qc/                # P7 审片证据：keyframes_sheet / frames_sheet / review.md
+└── logs/run.log       # 心跳（Web 看板投影进度，§4.4）</code></pre>
+<div class="k"><b>竖屏版 = 平行目录</b>（<code>D202611_001_E01_P/</code>），同一份剧本、同一套 cast，只是 <code>aspect=portrait</code>、交付 1080×1920——<b>零代码改动</b>。</div>
+
+<h3>8.4 状态机（没有 job.json：目录内容就是状态）</h3>
+<pre><code>PENDING → STORY → DIALOGUE → CAST → SHOTS(+FRAMES) → RENDER → ASSEMBLE → QC → DONE
+                            ↑___________ 任意一步失败 → RETRY(≤3) → FAILED
+RENDER 内部逐镜：shot_01 … shot_35，每镜独立记录状态（断点续跑粒度 = 单镜）</code></pre>
 <div class="k">
-断点续跑粒度做到<b>单镜</b>是刻意的：单镜 166–198s，一集 12 镜 36 分钟，崩在第 11 镜不该重跑前 10 镜。
+<b>状态怎么读出来：</b>不维护第二份状态表——<code>story.json</code> 存在 = 剧本已过；<code>clips/</code> 数量 = <code>shots.json</code> 数量 = 已出镜；<code>episode.mp4</code> 存在 = 已成片；<code>report.json</code> 的 <code>blocking</code> 为空 = 通过。Web 看板直接算这几个数（D11 / R19）。<br>
+断点续跑粒度做到<b>单镜</b>是刻意的：单镜 170–210s，一集 35 镜 ≈ 2 小时，崩在第 34 镜不该重跑前 33 镜。
 </div>
 </section>
 
 <!-- ================= 9 ================= -->
 <section id="stages">
-<h2>9 · 流水线六阶段细则</h2>
+<h2>9 · 流水线七阶段细则（T0–T7，与 §4.4 的任务卡一一对应）</h2>
+<p class="sub">v2 修订：阶段编号与 §4.4 任务卡对齐；台词单列一阶段（P2）；关键帧先行（P4）；后期拆成"逐镜归一 + 整片合成"（P6）。括号里是实跑数据【实测，3 集 105 镜】。</p>
 
 <h3>9.1 P1 剧本</h3>
 <table>
 <thead><tr><th>项</th><th>内容</th></tr></thead>
 <tbody>
-<tr><td>输入</td><td>题材一句话 + 风格 + 时长 + 镜头数</td></tr>
-<tr><td>做法</td><td>提示词模板 → 本地 LLM → 结构化 JSON；<b>schema 校验失败则带错误信息重试（≤2 次）</b>；仍失败 → 云 API</td></tr>
+<tr><td>输入</td><td>题材一句话 + 风格 + 时长 + 镜头数（35 镜 × 5.17s ≈ 181s/集）</td></tr>
+<tr><td>做法</td><td>提示词模板 → 本地 LLM → 结构化 JSON；<b>schema 校验失败则带错误信息重试（≤2 次）</b>；仍失败 → 云 API。<b>分块写</b>：一次写 12 镜（超过就被 max_tokens 截断，实测 E01 第一次就截断过）；LLM 开着 reasoning，token 预算要给足</td></tr>
 <tr><td>产出</td><td><code>story.json</code>（§8.1）</td></tr>
-<tr><td>验收</td><td>镜头数与时长吻合（12 镜 × 5.2s ≈ 60s）；每镜有 <code>prompt_en</code> + <code>subtitle_cn</code>；角色描述非空</td></tr>
-<tr><td>风险</td><td>Q2 量化的 27B 可能写出冗长散文或镜头数漂移 → 模板里<b>强制输出 JSON + 镜头数上限</b>，代码做二次裁剪</td></tr>
+<tr><td>验收</td><td><code>lint</code> 无 block：prompt_en 非空且无中文、idx 连续 1..N、<code>ref</code> 角色存在、duration_s ≈ 5.2；每镜有 <code>prompt_cn</code>（关键帧要靠它出图）</td></tr>
+<tr><td>风险</td><td>Q2 量化的 27B 可能写出冗长散文或镜头数漂移 → 模板强制 JSON + 镜头数上限，代码二次裁剪</td></tr>
 </tbody>
 </table>
 
-<h3>9.2 P2 定妆图（角色锚点）</h3>
+<h3>9.2 P2 台词 / 字幕（v2 新增阶段：主信息通道）</h3>
 <table>
 <thead><tr><th>项</th><th>内容</th></tr></thead>
 <tbody>
-<tr><td>输入</td><td><code>story.json</code> 的角色描述</td></tr>
-<tr><td>做法</td><td>Z-Image <b>t2i（中文提示词）</b> 生成候选 2–4 张 → 按一致性挑 1 张为主参考 + 1 张备选 → 后续分镜用 <b>i2i（denoise 0.6–0.75）</b> 派生变体，保持同一张脸</td></tr>
-<tr><td>产出</td><td><code>cast/c1.png</code>（主）、<code>cast/c1_alt.png</code>（备选，供 ref2va 的 <code>&lt;Picture 2&gt;</code>）</td></tr>
-<tr><td>验收</td><td>主参考图脸型/服装可辨、可复用于全剧；参考图必须<b>在渲染前 upload 到 ComfyUI input/</b>（<code>shortvideo.py</code> 已有 <code>upload_image()</code>）</td></tr>
-<tr><td>关键点</td><td>定妆图质量 = 全剧人物一致性的天花板。这一步<b>多花 2 分钟挑图，胜过重拍 10 镜</b></td></tr>
+<tr><td>为什么单列</td><td>实跑：初版 3 集共 105 镜，<b>对白只有 2 / 7 / 7 条</b>。剧本是纯动作流 → 观众三分钟几乎读不到信息。短剧是听觉媒介，台词/旁白是<b>主信息通道</b>，不是装饰</td></tr>
+<tr><td>输入</td><td><code>story.json</code>（每镜 beat / 在场角色 / 已有字幕）</td></tr>
+<tr><td>做法</td><td><b>代码决定哪些镜该有台词</b>（钩子镜与尾钩镜不写——用画面说话；有人在场必写；物镜按 beat 判）+ <b>LLM 只负责写内容</b>（每句 ≤16 字、不解释不抒情、不剧透、<b>不许留空</b>）→ <b>合并</b>进 story.json（已有字幕不动）</td></tr>
+<tr><td>产出</td><td>每镜 <code>dialogue_cn</code> / <code>subtitle_cn</code>；只改文本，<b>不改镜头 → 不需要重渲，只需重跑 assemble</b></td></tr>
+<tr><td>验收</td><td>有效字幕覆盖率 ≥ 40%；<b>有效字幕与台词分开算</b>，两者都 &lt;15% 才告警（悬疑片台词天然少，但两个都低就是信息断链）</td></tr>
+<tr><td>风险</td><td>第一版把"选镜"也交给 LLM → 它理解成"沉默也是戏"，35 镜只写出 1 条，<b>还覆盖掉已有的好字幕</b>（靠 <code>git checkout</code> 才救回来）。教训：<b>选镜权在代码、写入是合并不是覆盖</b></td></tr>
 </tbody>
 </table>
 
-<h3>9.3 P3 分镜</h3>
+<h3>9.3 P3 人物 / 场景图（角色锚点）</h3>
+<table>
+<thead><tr><th>项</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>输入</td><td><code>story.json</code> 的角色描述（身份锚点 + 造型 + <code>traits_en</code> 英文特征词）</td></tr>
+<tr><td>做法</td><td>Z-Image <b>t2i（中文提示词）</b> 出候选 2–4 张（约 10s/张）→ 审片台挑 1 张主参考 + 1 张备选（i2i 派生）→ 后续镜用 <b>ref2va</b>（<code>&lt;Picture 1&gt;</code> 主 + <code>&lt;Picture 2&gt;</code> 备）</td></tr>
+<tr><td>产出</td><td><code>cast/&lt;id&gt;.png</code>（主）、<code>cast/&lt;id&gt;_alt.png</code>（备）。<b>全剧共用</b>（<code>cast/</code> 软链到剧集根）→ 跨集不换脸</td></tr>
+<tr><td>验收</td><td>脸型/性别/年龄与设定一致（<code>facecheck.py</code>）；<b>提示词不含风格词</b>（D14：风格词会覆盖中性光，把参考图染成美颜网红脸）</td></tr>
+<tr><td>关键点</td><td>定妆图质量 = 全剧人物一致性的天花板。<b>多花 2 分钟挑图，胜过重拍 10 镜</b></td></tr>
+</tbody>
+</table>
+
+<h3>9.4 P4 分镜 + 关键帧（关键帧先行）</h3>
 <table>
 <thead><tr><th>项</th><th>内容</th></tr></thead>
 <tbody>
 <tr><td>输入</td><td><code>story.json</code> + 参考图清单</td></tr>
-<tr><td>做法</td><td>LLM 把每镜翻成 <b>H3 风格的英文提示词</b>：<code>&lt;Picture 1&gt; shows the same character. 动作 + 镜头运动 + 光线 + 风格 + natural ambient audio: …</code></td></tr>
-<tr><td>产出</td><td><code>shots.json</code>（§8.2，格式与现有脚本一致）</td></tr>
-<tr><td>验收</td><td>每条含 <code>&lt;Picture 1&gt;</code> 引用；含 <code>natural ambient audio</code> 描述（否则该镜没声音）；镜头顺序与剧本 beat 一致</td></tr>
-<tr><td>提示词纪律</td><td>沿用现有已验证句式（<code>&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. …, cinematic …, natural ambient audio: …</code>）——<b>这是实测出片的句式</b>，不要让 LLM 自由发挥结构</td></tr>
-<tr><td><b>ref 声明</b></td><td>每镜必须显式写 <code>ref</code>：<code>"c1"</code> / <code>"c2"</code> / <code>"c3"</code> = 镜内在场的人；<code>null</code> = <b>镜内无人</b>（照片背面特写 / 监控回放 / 鞋尖滴水 / 剪影 / 环境空镜）。<br>理由见 D13：ref2va 会把句式强制加上 "show the same character"，物镜被塞两张脸就会去画人。<code>null</code> 的镜走纯 t2v 工作流、不带参考图。<br>例外：照片里<b>就是角色本人</b>的那几镜仍用 ref2va——观众要靠脸认出"照片里的人是她"，参考图正是这个用途</td></tr>
-<tr><td>文字纪律</td><td>画面里<b>不得出现需要观众读懂的文字</b>（D12）：H3 / Z-Image 画出的字必是乱码。可读信息一律进 <code>subtitle_cn</code>（后期烧，一定正确）；画面内可保留"这里有行字"的质感但必须标明不可辨认（<code>illegible</code> / <code>too small to read</code>）</td></tr>
+<tr><td>做法</td><td>① <code>shots.json</code>：H3 固定句式（<code>&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character. …, &lt;style&gt;, natural ambient audio: …</code>），<b>不让 LLM 自由发挥结构</b>；② <b>关键帧</b>：每镜 1 张 Z-Image 图（约 10s/镜）→ <code>frames/NN.png</code> + <code>qc/keyframes_sheet.png</code> 拼图</td></tr>
+<tr><td>产出</td><td><code>shots.json</code>（含 <code>subtitle_cn</code> / <code>dialogue_cn</code>，供 SRT 与质检用）+ <code>frames/</code></td></tr>
+<tr><td>验收</td><td>每条含 <code>ref</code> 声明（<code>null</code> = 物镜，走纯 t2v，D13）；含 <code>natural ambient audio</code>；<b>关键帧拼图一屏审片</b></td></tr>
+<tr><td>为什么关键帧先行</td><td>构图/人物/光线对不对，用一张 10s 的图就能判断，用视频要 210s——<b>审片成本差 20 倍</b>（D20）。审图在烧 GPU 之前，改图比重渲便宜两个数量级</td></tr>
+<tr><td>文字纪律</td><td>画面里<b>不得出现需要观众读懂的文字</b>（D12）：H3 / Z-Image 画出的字必是乱码。可读信息一律进 <code>subtitle_cn</code>（后期烧，一定正确）</td></tr>
 </tbody>
 </table>
 
-<h3>9.4 P4 出镜（渲染）</h3>
+<h3>9.5 P5 分段镜头（渲染）</h3>
 <table>
 <thead><tr><th>项</th><th>内容</th></tr></thead>
 <tbody>
 <tr><td>输入</td><td><code>shots.json</code> + <code>cast/</code></td></tr>
-<tr><td>做法</td><td>逐镜：套 <code>i2v-final</code>（或 <code>i2v-rife</code>）模板 → 替换 <code>__H3_PROMPT__</code> / <code>__H3_REF_IMAGE_1__</code> → <code>POST /prompt</code> → 轮询 <code>/history/{pid}</code> → 下载产物 → 落盘 <code>clips/NN.mp4</code></td></tr>
-<tr><td>产出</td><td><code>clips/*.mp4</code>（每镜 640×352 / 24fps / 带音轨）</td></tr>
-<tr><td>纪律</td><td>① seed 每镜递增（避免 prompt_id 静默去重 C9）；② 成片只允许 <code>reproducible_only()</code> 档；③ 单镜失败重试 ≤3 且每次换 seed</td></tr>
-<tr><td>验收</td><td>每镜：时长 ≈ 5.2s、分辨率 640×352、<b>有音轨</b>、非黑帧</td></tr>
+<tr><td>做法</td><td>逐镜：套 <code>i2v-final</code>（人物镜）/ <code>t2v-final</code>（物镜）→ 替换 <code>__H3_PROMPT__</code> / <code>__H3_REF_IMAGE_1__</code> → <code>POST /prompt</code> → 轮询 <code>/history/{pid}</code> → 下载 → <code>clips/NN.mp4</code></td></tr>
+<tr><td>产出</td><td><code>clips/*.mp4</code>（每镜 640×352 / 5.17s / 带音轨）</td></tr>
+<tr><td>实测</td><td><b>170–210 s/镜</b>（ref2va 为主）；35 镜一集 ≈ <b>1 小时 55 分</b>；竖屏同规格再渲一遍</td></tr>
+<tr><td>纪律</td><td>① seed 每镜递增（避免 prompt_id 静默去重 C9）；② 成片只允许 <code>reproducible_only()</code> 档；③ 单镜失败重试 ≤3 且换 seed；④ <b>角色 <code>traits_en</code> 英文特征词进提示词</b>（R17：只靠参考图会漂，实测 9 镜把人渲成年轻男性）</td></tr>
+<tr><td>验收</td><td>每镜：时长 ≈ 5.17s、640×352、<b>有音轨</b>、非黑帧；重出只重出该镜（删 clip 即可续跑）</td></tr>
 </tbody>
 </table>
 
-<h3>9.5 P5 后期合成</h3>
+<h3>9.6 P6 整集（后期合成）</h3>
 <table>
-<thead><tr><th>步骤</th><th>做法</th><th>参数</th></tr></thead>
+<thead><tr><th>步骤</th><th>做法</th><th>参数 / 实测</th></tr></thead>
 <tbody>
-<tr><td>① 拼接</td><td>concat demuxer 逐样本 copy（音轨不重编码）</td><td><code>-c copy</code>，要求各镜参数完全一致</td></tr>
-<tr><td>② 字幕</td><td><code>story.json</code> 的 <code>subtitle_cn</code> → SRT → 烧录</td><td>思源黑体 / 白字黑边 / 底部安全区</td></tr>
-<tr><td>③ 音量</td><td>统一响度 + 限幅</td><td><b>−1dB limiter</b>（H3 音轨实测 mean −14~−34dB，缓存档低 8dB，务必归一）</td></tr>
-<tr><td>④ 交付分辨率</td><td><code>upscale_video.py --scale 3</code>：640×352 → 1920×1056</td><td>音轨逐样本不变</td></tr>
-<tr><td>⑤ 输出</td><td>H.264 + AAC，24fps</td><td><code>episode.mp4</code></td></tr>
+<tr><td>① 逐镜归一</td><td>每镜先对齐到同一响度，再拼（整片归一会把动态压扁）</td><td><code>loudnorm=I=-20:TP=-3:LRA=11</code>；实测整片 LRA <b>20.8 → 7.4 LU</b></td></tr>
+<tr><td>② 拼接</td><td>concat demuxer，<code>-c copy</code></td><td>横屏 3× 上采样到 1920×1056；竖屏直接 scale 到 1080×1920</td></tr>
+<tr><td>③ 烧字幕</td><td>libass + Noto Sans CJK SC，白字黑边</td><td>横屏 <code>FontSize=42,MarginV=56</code>；竖屏 <code>FontSize=54,MarginV=360</code>（避开平台 UI）。<b>只去相邻重复</b>，隔得远的重复是叙事回环保留</td></tr>
+<tr><td>④ BGM 情绪床</td><td><code>assets/bgm.oga</code>（CC BY 4.0，署名随片）垫底</td><td><code>amix normalize=0</code> + <b>必须走 <code>-filter_complex</code></b>（<code>-af</code> 是单输入链，装不下第二路；实测踩过）</td></tr>
+<tr><td>⑤ 整片响度</td><td>两遍 loudnorm + 限幅</td><td><code>alimiter level=disabled</code>（默认自动电平会把限掉的电平推回去 → 数字削波）。实测 I=-16.0 LUFS、峰值 -1.1 dBFS</td></tr>
+<tr><td>⑥ 系列级亮度</td><td>测整片平均亮度 → eq 校正到 YAVG 90</td><td>实测 E01 94.6 / E02 100.6 / E03 82.0 → 统一到 88.5–90</td></tr>
+<tr><td>⑦ 输出</td><td>H.264 + AAC 24fps + faststart</td><td><code>episode.mp4</code>（横屏 1920×1056 / 竖屏 1080×1920）</td></tr>
 </tbody>
 </table>
+<div class="k"><b>中间件复用：</b>concat / upscaled / norm 都带"比依赖新就跳过"的判断（<code>_fresh()</code>）——只改字幕时，重跑 assemble 只需重烧字幕，不必重拼重放大（实跑 3 集 assemble ≈ 1.5 分钟）。</div>
 
-<h3>9.6 P6 自动质检</h3>
+<h3>9.7 P7 自动质检</h3>
 <table>
 <thead><tr><th>检查项</th><th>方法</th><th>不通过怎么办</th></tr></thead>
 <tbody>
-<tr><td>时长</td><td><code>ffprobe</code> 读时长，与 story 目标差 &gt; 0.5s</td><td>告警（可能是某镜帧数不对）</td></tr>
-<tr><td>分辨率/帧率</td><td>1920×1056 / 24fps</td><td>阻断</td></tr>
+<tr><td>时长</td><td>ffmpeg 解析时长，与 story 目标差 &gt; 0.5s</td><td>告警（某镜帧数不对）</td></tr>
+<tr><td>分辨率 / 帧率</td><td>1920×1056（或 1080×1920）/ 24fps</td><td>阻断</td></tr>
 <tr><td>黑帧</td><td><code>blackdetect</code></td><td>标记该镜，重出</td></tr>
-<tr><td>静音</td><td><code>silencedetect</code>（H3 无音轨时）</td><td>标记该镜</td></tr>
-<tr><td>削波</td><td><code>volumedetect</code> max &gt; −0.3 dB</td><td>重挂 limiter</td></tr>
+<tr><td>静音</td><td><code>silencedetect</code></td><td>标记该镜</td></tr>
+<tr><td>削波</td><td><code>volumedetect</code> max &gt; <b>-1.0 dBFS</b></td><td>重挂 limiter</td></tr>
 <tr><td>缺镜</td><td>镜头数 vs story</td><td>阻断</td></tr>
-<tr><td>人眼抽检</td><td>生成 contact sheet（每镜抽 1 帧 + 定妆图并排）</td><td>人工确认一致性</td></tr>
+<tr><td>响度</td><td>I = -16 LUFS ±1、LRA ≤ 12 LU</td><td>重跑归一链</td></tr>
+<tr><td>信息量</td><td>有效字幕覆盖率、台词数<b>分开算</b>，都 &lt;15% 才告警</td><td>回 P2 补台词</td></tr>
+<tr><td>人眼抽检</td><td><code>qc/review.md</code> 文字审核单（每镜一行）+ 关键帧 / 视频抽帧拼图</td><td>标记 redo → 只重出该镜</td></tr>
 </tbody>
 </table>
+<div class="k"><b>产物：</b><code>report.json</code>（机器读，<code>blocking</code> 非空即阻断）+ <code>qc/review.md</code>（人读，Web 审片台与 TUI 都能看）。</div>
 </section>
 
 <!-- ================= 10 ================= -->
@@ -660,26 +776,48 @@ RENDER 内部逐镜：shot_01 … shot_12，每镜独立记录状态（断点续
 <li><b>真实成本 = 人工审片时间 + 返工</b>。方案里所有"省时间"的优化（草稿档、缓存档）本质都是<b>把审片时间前置到低成本阶段</b>。</li>
 <li><b>脚本阶段</b>是唯一可能产生外部费用的环节（云 API 兜底时）。</li>
 </ul>
+<h3>11.4 实测产能【实测】（本机 3 集，2026-11-03 ~ 11-04）</h3>
+<table>
+<thead><tr><th>环节</th><th>实测值</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>集长</td><td><b>180.93 s</b>（35 镜 × 5.17s）</td><td>横屏竖屏同长；时间码按<b>实际</b>每镜时长排，不按理论值</td></tr>
+<tr><td>单镜渲染</td><td><b>170–210 s</b></td><td>ref2va 为主；t2v 物镜略快</td></tr>
+<tr><td>单集渲染</td><td><b>≈ 1 h 55 min</b>（35 镜，GPU 独占）</td><td>约占单集墙钟的 95%</td></tr>
+<tr><td>3 集横屏 + 3 集竖屏</td><td>210 镜 ≈ <b>10–12 h GPU</b></td><td>分两天跑完（跨天连跑，不留人在场）</td></tr>
+<tr><td>定妆图</td><td>2 角色 × 3 候选 ≈ <b>70 s</b></td><td><b>全剧共用</b>，跨集复用 → 边际成本 ≈ 0</td></tr>
+<tr><td>关键帧</td><td><b>10 s/镜</b> → 35 镜 ≈ 6 min/集</td><td>审片前置的关键（10s vs 210s）</td></tr>
+<tr><td>后期 assemble</td><td><b>≈ 1.5 min/集</b>（纯 CPU）</td><td>中间件复用时只重烧字幕</td></tr>
+<tr><td>质检 qc</td><td><b>&lt; 1 min/集</b></td><td>黑帧/静音/削波/缺镜/响度/字幕覆盖率</td></tr>
+<tr><td>成片体积</td><td>横屏 ≈ <b>139 MB/集</b>（3× 放大 + CRF 18）</td><td>竖屏同量级</td></tr>
+<tr><td>人工</td><td>审片 ≈ <b>5–10 min/集</b>（关键帧拼图一屏 + 成片抽检）</td><td>第二瓶颈，但已被关键帧先行压到可接受</td></tr>
+</tbody>
+</table>
+<div class="box info">
+<b>产能推论（可直接排产）：</b>GPU 是第一瓶颈（≈95% 墙钟），人是第二瓶颈（审片）。批量生产时应当<b>GPU 连续排队 + 人在前一批的审片结论上并行工作</b>；Web 看板（§4.3）让这两件事都不需要盯终端。
+</div>
 </section>
 
 <!-- ================= 12 ================= -->
 <section id="ms">
 <h2>12 · 里程碑与验收</h2>
 <table>
-<thead><tr><th>里程碑</th><th>工期</th><th>交付物</th><th>验收标准</th></tr></thead>
+<thead><tr><th>里程碑</th><th>工期</th><th>交付物</th><th>验收标准</th><th>状态（v2 实跑）</th></tr></thead>
 <tbody>
-<tr><td><b>M0 · 基线复核</b></td><td>0.5 天</td><td>基线数据表</td><td><code>h3turing doctor</code> 全绿；<code>h3turing bench --a t2v-final --b i2v-final</code> 跑出本机当次基线（用于对比后续优化）</td></tr>
-<tr><td><b>M1 · 渲染层封装</b></td><td>1 天</td><td><code>render.py</code></td><td>给定 <code>shots.json</code> + 参考图，产出 3 镜 clips；单镜失败重试生效；中途 kill 后能续跑</td></tr>
-<tr><td><b>M2 · 剧本层</b></td><td>1–1.5 天</td><td><code>llm.py</code> + <code>story.py</code> + <code>shots.py</code> + prompts/</td><td>10 个题材各生成 1 份 story.json，<b>≥8 份 schema 合法</b>且镜头数/时长正确；本地 LLM 与云兜底两条路都验证过</td></tr>
-<tr><td><b>M3 · 角色一致性</b></td><td>1 天</td><td><code>cast.py</code></td><td>定妆图 2–4 候选自动挑选流程跑通；3 镜人脸/服装一致（人工确认）</td></tr>
-<tr><td><b>M4 · 后期合成</b></td><td>1 天</td><td><code>assemble.py</code></td><td>3 镜 → 1 条 1920×1056 / 24fps / 带字幕 / 不削波的 MP4；音画不错位</td></tr>
-<tr><td><b>M5 · 编排与调度</b></td><td>1–1.5 天</td><td><code>job.py</code> + <code>gate.py</code> + <code>sd</code> CLI + pi skill</td><td><code>sd run --brief "…"</code> 一条命令出片；显存门控生效（人为占住显存时能正确拒绝并提示）</td></tr>
-<tr><td><b>M6 · 质检与批量</b></td><td>1 天</td><td><code>qc.py</code> + <code>sd batch</code></td><td>质检能检出黑帧/静音/削波/缺镜；批量 5 集连续跑完不崩</td></tr>
-<tr><td><b>P2（可选）· 本地配音</b></td><td>2–3 天</td><td>TTS 接入 + 对轨</td><td>台词转语音并与画面时间轴对齐；需先选定 TTS 底模并解决显存窗口</td></tr>
+<tr><td><b>M0 · 基线复核</b></td><td>0.5 天</td><td>基线数据表</td><td><code>h3turing doctor</code> 全绿；<code>bench --a t2v-final --b i2v-final</code> 跑出当次基线</td><td><span class="tag ok">已完成</span></td></tr>
+<tr><td><b>M1 · 渲染层封装</b></td><td>1 天</td><td><code>episode.py</code> 的 render 阶段</td><td>单镜失败重试生效；中途 kill 后按单镜续跑</td><td><span class="tag ok">已完成</span>3 集 × 35 镜 × 2 画幅</td></tr>
+<tr><td><b>M2 · 剧本层</b></td><td>1–1.5 天</td><td><code>tools/polish.py</code> + <code>prompts/</code> + <code>lint</code></td><td>story.json schema 合法、镜数/时长对齐；本地 LLM 与云兜底都验证过</td><td><span class="tag ok">已完成</span>3 集 × 35 镜</td></tr>
+<tr><td><b>M3 · 角色一致性</b></td><td>1 天</td><td>定妆候选 + 挑图流程（<code>cast/selection.json</code>）</td><td>跨镜人脸/服装一致（人工确认）；<code>facecheck</code> 拦截</td><td><span class="tag ok">已完成</span>全剧共用 cast + traits_en 补丁</td></tr>
+<tr><td><b>M4 · 后期合成</b></td><td>1 天</td><td>assemble（归一 + 亮度 + BGM + 字幕）</td><td>1920×1056 / 24fps / 带字幕 / 不削波；LRA ≤ 12；集间亮度一致</td><td><span class="tag ok">已完成</span>I=-16.0 LUFS，峰值 -1.1 dBFS</td></tr>
+<tr><td><b>M5 · 编排与调度</b></td><td>1–1.5 天</td><td><code>episode.py</code> 阶段驱动 + pi skill</td><td>一集一条命令跑完六个阶段；单镜续跑</td><td><span class="tag ok">已完成</span></td></tr>
+<tr><td><b>M6 · 质检与批量</b></td><td>1 天</td><td><code>qc</code> + <code>report.json</code> + <code>qc/review.md</code></td><td>检出黑帧/静音/削波/缺镜/响度/字幕覆盖率</td><td><span class="tag ok">已完成</span>3 集 blocking=0</td></tr>
+<tr><td><b>M7 · 台词 / 信息通道</b><br><span class="tag gray">v2 新增</span></td><td>1 天</td><td><code>tools/add_dialogue.py</code> + P2 阶段</td><td>有效字幕覆盖率 ≥ 40%；台词与有效字幕分开统计</td><td><span class="tag ok">已完成</span>30/31/32 镜（88%）</td></tr>
+<tr><td><b>M8 · Web 模式任务看板</b><br><span class="tag gray">v2 新增</span></td><td>2–3 天</td><td><code>studio.py</code> 任务看板 + Web→agent 触发 + 心跳投影</td><td>浏览器里建任务 → 逐阶段触发 → 看进度与产物；<b>网页不执行 GPU 动作</b></td><td><span class="tag mid">进行中</span>审片台已上线；看板与 agent 触发待做</td></tr>
+<tr><td><b>M9 · 批量与系列化</b></td><td>1–2 天</td><td><code>sd batch</code> + 系列级质检</td><td>连续 5 集不崩；跨集亮度/响度/定妆一致</td><td><span class="tag gray">未开始</span></td></tr>
+<tr><td><b>P2（可选）· 本地配音</b></td><td>2–3 天</td><td>TTS 接入 + 对轨</td><td>台词转语音并与画面时间轴对齐</td><td><span class="tag gray">未开始</span></td></tr>
 </tbody>
 </table>
 <div class="box tip">
-<b>合计：M0–M6 ≈ 7–8.5 人日</b>（不含审片与内容调优）。第一个端到端成片在 <b>M4 结束</b>（约 4.5 天）就能看到；<b>M5 之前都是"手动串脚本"，这是刻意安排的</b>——先证明链路通，再做自动化。
+<b>v1 合计：M0–M6 ≈ 7–8.5 人日</b>（不含审片与内容调优）。<b>v2 现状：M0–M7 已实跑完成</b>（3 集 × 2 画幅 = 210 镜，真实耗时见 §11.4），<b>剩余 M8（Web 模式任务看板）+ M9（批量与系列化）≈ 3–5 人日</b>。第一个端到端成片在 M4 结束就能看到；<b>M5 之前都是"手动串脚本"</b>——这个顺序没变，先证明链路通，再做自动化。
 </div>
 </section>
 
@@ -703,6 +841,11 @@ RENDER 内部逐镜：shot_01 … shot_12，每镜独立记录状态（断点续
 <tr><td>R12</td><td>画面内文字渲染成乱码（日期 / 时间戳 / 手写字 / 招牌）</td><td>观众看到乱码，尾钩失效</td><td>画面里出现疑似文字</td><td>生成期禁写可读文字（D12），可读信息一律进 <code>subtitle_cn</code> 由后期烧；<code>textcheck.py</code> 出图前拦截</td></tr>
 <tr><td>R13</td><td>物镜被 ref2va 画成人物（照片特写变"某人拿着照片"）</td><td>叙事错乱、节奏断裂</td><td>物镜里冒出人脸</td><td>每镜显式声明 <code>ref</code>，<code>null</code> 走纯 t2v（D13）；<code>set_refs.py</code> 逐镜标注</td></tr>
 <tr><td>R14</td><td>定妆图"大众脸" / 性别错 / 跨集换脸</td><td>全剧一致性崩塌（R3 的上游）</td><td>角色不像设定、每集换人</td><td>身份锚点独立成字段并硬性校验（D14）；<code>facecheck.py</code> 出图前拦截；定妆图 3 集共用（<code>cast/</code> 软链）</td></tr>
+<tr><td>R15</td><td>信息断链：对白太少，观众三分钟读不到信息</td><td>完播率低（专业评审直接判低分）</td><td>qc 里"有效字幕 / 台词"两个数都低</td><td>台词单列为 P2 阶段（D19）：代码选镜、LLM 只写字、合并不覆盖；覆盖率 &lt;15% 才告警，qc 直接指回该阶段</td></tr>
+<tr><td>R16</td><td>工具链<b>静默失败</b>：参数写对、结果却是错的</td><td>后期指标失真（响度/亮度/混音悄悄不对）</td><td>三例实测：<code>-af</code> 装不下 <code>amix</code>（第二路音轨丢失）、<code>metadata=print</code> 被 <code>-loglevel error</code> 吞掉（亮度测出 0）、亮度均值除数写错（除以样本数×段长）</td><td>每个后期环节<b>必须打印自己的实测值</b>（I / LRA / 峰值 / YAVG），agent 跑完要回读这些数字再判定；不能只看"命令返回 0"</td></tr>
+<tr><td>R17</td><td>ref2va 参考图漂移：同一角色跨镜变人</td><td>崩脸，返工重拍</td><td>实测某角色 9 镜被渲成年轻男性</td><td>角色加 <code>traits_en</code> 英文特征词并写进每镜提示词（不只是靠参考图）；<code>facecheck</code> + 关键帧审片前置</td></tr>
+<tr><td>R18</td><td>长等待无可见性：单集渲染 ≈ 2 小时</td><td>人以为"没在跑"→ 反复问、反复重启</td><td>终端无输出</td><td>阶段执行器写心跳到 <code>logs/run.log</code>，Web 看板投影进度与产物（§4.4 硬要求）；断点续跑让"重启"永远只重做最后一镜</td></tr>
+<tr><td>R19</td><td>Web 模式引入第二份状态</td><td>看板和 job 目录打架</td><td>网页显示的进度与实际文件不符</td><td>网页只读投影 + 写决定文件，<b>不存状态</b>（D11/D18）；状态一律回读 job 目录</td></tr>
 </tbody>
 </table>
 </section>
@@ -758,6 +901,11 @@ H3_LISTEN=127.0.0.1 bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.loc
 <tr><td>1080p 交付上采样</td><td class="mono">python3 /home/a/ai-work/minimax-h3-turing/scripts/upscale_video.py in.mp4 out.mp4 --scale 3</td></tr>
 <tr><td>本地 LLM（剧本）</td><td class="mono">curl http://127.0.0.1:8080/v1/chat/completions -d @req.json</td></tr>
 <tr><td>pi 无头编排</td><td class="mono">pi --print --model llama-local:qwen38-27b-lynstyle "…"</td></tr>
+<tr><td>一集跑完（阶段驱动）</td><td class="mono">python3 shortdrama/episode.py /home/a/ai-work/duanju/D202611_001_E01 shots frames render assemble qc</td></tr>
+<tr><td>审片 Web 面板（任务看板 + 逐镜审片）</td><td class="mono">./sd studio /home/a/ai-work/duanju --port 8095</td></tr>
+<tr><td>补台词 / 字幕（v2 P2 阶段）</td><td class="mono">python3 tools/add_dialogue.py --root /home/a/ai-work/duanju --episode E01</td></tr>
+<tr><td>看某集进度（agent 读心跳）</td><td class="mono">tail -3 &lt;job&gt;/logs/run.log</td></tr>
+<tr><td>pi 无头编排</td><td class="mono">pi --print --model llama-local:qwen38-27b-lynstyle "…"</td></tr>
 </tbody>
 </table>
 
@@ -808,7 +956,7 @@ H3_LISTEN=127.0.0.1 bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.loc
 <h3>15.5 数字可信度约定</h3>
 <div class="box info">
 <b>【实测】</b>= 本机真权重、真硬件跑出来的数字（可复现）。<b>【推算】</b>= 基于实测单镜耗时乘算出来的，未端到端验证，<b>不得当结论引用</b>。<b>【来自手册】</b>= 引自 <code>minimax-h3-turing</code> 手册的实测记录（同样为本机，2026-09~11）。<br>
-本方案里所有"产能"数字都是【推算】，请在 M6 拿到真实批量数据后回填本表。
+本方案里 v1 的"产能"数字是【推算】；<b>v2 已用 3 集实跑回填</b>（§11.4 实测表、§15.7 实测数据）。回填后仍要区分：<b>【实测·成片】</b>= 真实跑完 3 集 210 镜的端到端数字（可当结论引用）；<b>【实测·单镜】</b>= 单镜基准（可外推）；<b>【推算】</b>= 乘法外推（不得当结论）。
 </div>
 
 <h3>15.6 立刻可做的三件事（今天就能开工）</h3>
@@ -817,10 +965,38 @@ H3_LISTEN=127.0.0.1 bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.loc
 <li>用现有 <code>scripts/shortvideo.py</code> + 已有 <code>cast</code> 图，手动再串一集 6 镜，把后期（字幕/音量/上采样）先手工做一遍 —— <b>这一步会暴露 80% 的真实问题</b>。</li>
 <li>让本地 LLM 写 3 个题材的 <code>story.json</code>，人工评估质量 —— 这决定 R1（剧本质量）是真风险还是假风险。</li>
 </ol>
+<h3>15.7 实测数据回填（3 集，2026-11-03 ~ 11-04）</h3>
+<table>
+<thead><tr><th>指标</th><th>E01</th><th>E02</th><th>E03</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>镜数 / 集长</td><td>35 / 180.93s</td><td>35 / 180.93s</td><td>35 / 180.93s</td><td>竖屏版同长</td></tr>
+<tr><td>交付画幅</td><td>1920×1056 + 1080×1920</td><td>同左</td><td>同左</td><td>竖屏原生生成（D16）</td></tr>
+<tr><td>有效字幕</td><td>4/35 → <b>30/35</b></td><td>8/35 → <b>31/35</b></td><td>8/35 → <b>32/35</b></td><td>补台词前 → 后（D19）</td></tr>
+<tr><td>台词</td><td>2/35 → <b>30/35</b></td><td>7/35 → <b>31/35</b></td><td>7/35 → <b>32/35</b></td><td>台词 ≈ 有效字幕（本剧以字幕承载信息）</td></tr>
+<tr><td>整片响度 I</td><td>-17.0 → <b>-16.0 LUFS</b></td><td>-15.7 LUFS</td><td>-15.7 LUFS</td><td>目标 -16 ±1</td></tr>
+<tr><td>LRA</td><td>20.8 → <b>7.4 LU</b></td><td>23.1 LU</td><td>—</td><td>逐镜归一后（E01 已验证）</td></tr>
+<tr><td>真峰值</td><td>-1.3 → <b>-1.1 dBTP</b></td><td>-1.5 dBTP</td><td>—</td><td>limiter level=disabled 后不削波</td></tr>
+<tr><td>平均亮度 YAVG</td><td>94.6 → <b>88.5</b></td><td>100.6 → 90</td><td>82.0 → 90</td><td>系列级统一（D21）</td></tr>
+<tr><td>单镜渲染</td><td colspan="3"><b>170–210 s</b>（35 镜 ≈ 1h55m/集，210 镜 ≈ 10–12 h）</td><td>GPU 独占，串行</td></tr>
+<tr><td>qc blocking</td><td>0</td><td>0</td><td>0</td><td>剩余为 warn（提示级）</td></tr>
+</tbody>
+</table>
+
+<h3>15.8 Web 模式落点（v2）</h3>
+<table>
+<thead><tr><th>能力</th><th>状态</th><th>落点</th></tr></thead>
+<tbody>
+<tr><td>审片台：选图 / 逐镜审片 / 看成片</td><td><span class="tag ok">已上线</span></td><td><code>./sd studio &lt;剧集根&gt; --port 8095</code>：只读投影 + 带令牌写决定（<code>cast/selection.json</code> / <code>review.json</code>），媒体接口支持 HTTP Range，手机端适配</td></tr>
+<tr><td>文字审核单（无网降级）</td><td><span class="tag ok">已上线</span></td><td><code>qc/review.md</code>：每镜一行，agent 在 TUI 里也能读</td></tr>
+<tr><td>任务看板：建任务 / 阶段进度 / 触发</td><td><span class="tag mid">M8 待做</span></td><td>看板 + 「跑这一阶段」按钮 → 起 pi 无头 session 跑该阶段（§4.4 / §7.3）</td></tr>
+<tr><td>心跳投影</td><td><span class="tag mid">M8 待做</span></td><td>读 <code>logs/run.log</code> 尾部 → 进度条 + 当前镜</td></tr>
+<tr><td>账号 / 权限 / 数据库</td><td><span class="tag no">不做</span></td><td>单机单人产线（D18 / R19）</td></tr>
+</tbody>
+</table>
 </section>
 
 <footer>
-自动化短剧 / 短视频平台建设方案 · 生成于 2026-11-02 · 适用机器：X99 + RTX 2080 Ti 22GB（sm_75）· 底座：pi-agent + ComfyUI v0.33.1 + MiniMax-H3 W4A8 + Z-Image-Turbo
+自动化短剧 / 短视频平台建设方案 · 生成于 2026-11-02 · <b>v2 修订 2026-11-04</b>（依据 D202611_001 三集实跑：横屏 3 集 + 竖屏 3 集 / 210 镜；新增 Web 模式与 pi-agent 内核设计，§4.3–4.4 / D18–D21 / R15–R19）· 适用机器：X99 + RTX 2080 Ti 22GB（sm_75）· 底座：pi-agent + ComfyUI v0.33.1 + MiniMax-H3 W4A8 + Z-Image-Turbo
 </footer>
 </main>
 </div>

@@ -57,9 +57,14 @@ def prepare(track: Path | str, duration: float, out: Path | str,
     return out
 
 
-def mix_filter(bgm_path: Path | str) -> str:
-    """把 BGM 混进去的滤镜（放在整片 loudnorm 之前，让整片归一把两者一起算）。"""
-    return f"[1:a]volume=-6dB[m];[0:a][m]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+def mix_filter(audio_chain: str) -> str:
+    """两路混音的 filter_complex：环境音 + BGM → 整片归一链。
+
+    amix 默认 normalize=1 会把两路等比缩放（破坏我们定好的"音乐比环境音低 12 dB"），
+    所以关掉，交给后面的限幅器兜底。
+    """
+    return (f"[0:a][1:a]amix=inputs=2:duration=first:normalize=0:dropout_transition=0[mix];"
+            f"[mix]{audio_chain}[aout]")
 
 
 def credits(track: Path | str) -> str:

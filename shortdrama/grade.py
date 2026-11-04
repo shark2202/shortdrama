@@ -39,19 +39,21 @@ def ffmpeg() -> str:
 
 def measure_brightness(path: Path | str, samples: int = 3, each: int = 6) -> float:
     """采样几段测平均亮度（比整片快得多，够用）。"""
-    total = float(samples) * each
     acc = 0.0
+    used = 0
     for i in range(samples):
         start = i * 30
         p = subprocess.run(
-            [ffmpeg(), "-hide_banner", "-loglevel", "error", "-ss", str(start),
+            # 注意：metadata=print 走 info 级日志，不能加 -loglevel error，否则被吞掉
+            [ffmpeg(), "-hide_banner", "-ss", str(start),
              "-t", str(each), "-i", str(path),
              "-vf", "signalstats,metadata=print:key=lavfi.signalstats.YAVG",
              "-f", "null", "-"], capture_output=True, text=True)
         vals = [float(v) for v in re.findall(r"YAVG=([\d.]+)", p.stderr)]
         if vals:
             acc += sum(vals) / len(vals)
-    return acc / total if total else 0.0
+            used += 1
+    return acc / used if used else 0.0
 
 
 def brightness_filter(current: float, target: float = TARGET_YAVG) -> str:
