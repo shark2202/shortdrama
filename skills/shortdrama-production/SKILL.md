@@ -106,18 +106,29 @@ $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → $EP/repor
 - **字幕先放大再烧**：640×352 上烧字再放大 = 糊；在 1920×1056 上烧更清楚。
   `episode.py assemble` 已按这个顺序。
 - **H3 源音轨会削波**（实测 02/05 镜峰值 0 dBFS）：后期必须挂 `alimiter`（`episode.py assemble` 已带
-  `loudnorm + alimiter=limit=0.891`）。镜头级削波记 warn，成片级削波才阻断。
+  `loudnorm + alimiter`）。镜头级削波记 warn，成片级削波才阻断。
+- **响度链三个坑（三集实测，都会静默出错）**：
+  ① 限幅上限要 **-2.0 dBFS**（`limit=0.794`）：AAC 编码过冲 +0.5~0.6 dB，限到 -1.0 → 成片 -0.6 直接阻断；
+  ② 限幅 **attack=0.1ms**：H3 音轨有 ~4ms 瞬态突发，attack=1ms 时突发头部样本按原电平通过，
+  AAC 重构越过 0 dBFS → 成片里出现被削平的样本（volumedetect 报 max_volume 0.0 dB）；
+  ③ **逐镜归一**（`loudnorm=I=-20`）再做整片两遍 loudnorm：整片 LRA 从 20.8 降到 7.4 LU。
+  三个参数缺一个，qc 都会报"峰值超标"。
+- **BGM 混音必须走 `-filter_complex`**：`-af` 是单输入链，装不下第二路（`amix` 在 `-af` 里会丢一路）。
+  `amix` 要 `normalize=0`，否则两路等比缩放，音乐盖过环境音。
+- **亮度测量会被日志级别吞掉**：`metadata=print` 是 info 级日志，`-loglevel error` 会把它扔掉 → 亮度测出 0。
+  亮度均值要除以**样本数**（不是样本数×段长）。三集平均亮度差 25% → 统一到 YAVG 90。
 - **扩散模型写不好招牌文字**：霓虹牌上的汉字是乱码。构图避开大面积可读文字，或后期贴真字。
 - **本机没有 ffprobe**：`episode.py` 用 `ffmpeg -i` 解析 stderr 拿时长/分辨率/帧率。
 - **显存是唯一硬瓶颈**：本地 LLM（13–17GB）和 H3（≈20GB）不能同时驻留，
   流水线必须阶段串行；渲染期间别启别的 GPU 任务。
 
 ## 知识资产沉淀（每次跑完都要做）
-## 知识资产沉淀（每次跑完都要做）
 
 - 剧本/分镜/定妆图/成片 → 留在 `$EP`（目录即状态）。
 - 新踩的坑 → 追加到本 SKILL 的"踩过的坑"。
 - 流程有变动 → 同步 `workspace/shortdrama/docs/SOP-短剧生产.md` 与 `workspace/shortdrama/README.md`。
+- 平台能力有变动（新增看板/阶段/接口）→ 同步 `workspace/shortdrama/docs/自动化短剧平台建设方案.html`
+  （方案是设计权威源：§4.4 任务卡、§6 决策、§12 里程碑状态、§15.8 落点表）。
 
 ## 参考实践
 
