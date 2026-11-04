@@ -67,17 +67,21 @@ $EPY $SCRIPT $EP lint      # 剧本预检（毁集级错误在秒级挡下）
 $EPY $SCRIPT $EP cast      # 定妆候选图（Z-Image 中文 t2i，约 10s/张）
 #   ↓ agent 看图挑人 → 写 $EP/cast/selection.json
 $EPY $SCRIPT $EP pick      # → cast/<id>.png（主）+ <id>_alt.png（备）
+#   ↓ P2 台词：代码选镜、LLM 只写字（合并不覆盖）；只改文本 → 不用重渲
+$EPY tools/add_dialogue.py --root /home/a/ai-work/duanju --episode E01
 $EPY $SCRIPT $EP shots     # story.json → shots.json（自动加 <Picture 1> 前缀）
 $EPY $SCRIPT $EP frames    # 每镜 1 张关键帧图（约 10s/镜）→ frames/NN.png
 #   ↓ agent 看 qc/keyframes_sheet.png 审片：构图/人物/光线对不对（改图 10s vs 改视频 210s）
 $EPY $SCRIPT $EP render    # 逐镜出镜（H3 ref2va/t2v，约 210s/镜）
 $EPY $SCRIPT $EP review    # 关键帧拼图 + 视频抽帧拼图 + clips/manifest.json（一屏审片）
-$EPY $SCRIPT $EP assemble  # 拼接 → 3x 放大 → 烧字幕 + 统一响度 → episode.mp4
-$EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → report.json
+$EPY $SCRIPT $EP assemble  # 拼接 → 3x 放大 → 烧字幕 + BGM + 统一响度/亮度 → episode.mp4
+$EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率/字幕覆盖率 → report.json
 ```
 
 - 剧本由 **pi-agent** 按 `prompts/story.md` 写（不用本地 LLM 服务，省掉一整套起停与解析）。
 - 详细步骤与踩坑：`docs/SOP-短剧生产.md`；agent 用法：`skills/shortdrama-production/SKILL.md`。
+- 审片走本地 Web（`./sd studio /home/a/ai-work/duanju --port 8095`）：选图 / 逐镜判定 / 看成片，写决定文件。
+- 方案 v2（2026-11-04，按 3 集实跑修订）：`docs/自动化短剧平台建设方案.html` §4.3 Web 模式（pi-agent 作 agent 内核）、§4.4 阶段任务卡 T0–T7、§15.7 实测数据。
 
 ## 静态服务（方案文档）
 
