@@ -29,7 +29,13 @@ from typing import Any
 TARGET_I = -16.0
 TARGET_TP = -1.5          # 滤镜端留 0.5 dB 给 AAC 编码过冲
 TARGET_LRA = 12.0
-LIMITER = "alimiter=limit=0.794:attack=1:release=50:level=disabled"   # -2.0 dBFS：给 AAC 编码的 +0.5~0.6 dB 过冲留余量
+LIMITER = "alimiter=limit=0.794:attack=0.1:release=50:level=disabled"   # -2.0 dBFS + 最快 attack
+# 为什么 attack 取 0.1ms（ffmpeg 最小值）而不是 1ms：
+# H3 原生音轨里有 ~4ms 的瞬态突发。attack=1ms 时限幅器的增益下降有斜坡，突发头几个样本
+# 仍按原电平通过 → +4dB 增益后到 -0.1 dBFS → AAC 重构时越过 0 dBFS，文件里出现被削平的
+# 样本（实测 E03_P 有 184 个样本顶到 1.0，volumedetect 报 max_volume 0.0 dB）。
+# attack=0.1ms 时同一段只有 5 个样本以内被放过，实测 0 个削平样本、峰值 -1.5 dBFS。
+# 限幅上限取 -2.0 dBFS：AAC 编码实测过冲 +0.5~0.6 dB（限 -1.0 → 成片 -0.6；限 -1.5 → -0.9）。
 
 
 def ffmpeg() -> str:
