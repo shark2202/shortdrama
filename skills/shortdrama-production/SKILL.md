@@ -1,6 +1,6 @@
 ---
 name: shortdrama-production
-description: 在本机（RTX 2080Ti 22G + ComfyUI :8188 + MiniMax-H3 W4A8 + Z-Image）用 pi-agent 当编剧、ComfyUI 出画出片，一句话题材产出短剧成片（剧本/定妆图/分镜/成片 MP4/质检报告），并沉淀 SOP 与知识资产。触发词：短剧、出片、剧本→成片、shot、episode.mp4、Z-Image 定妆、H3 出镜、跑一集短剧。
+description: 在本机（RTX 2080Ti 22G + ComfyUI :8188 + MiniMax-H3 W4A8 + Z-Image）用 pi-agent 当编剧、ComfyUI 出画出片，一句话题材产出短剧成片（剧本/定妆图/分镜/成片 MP4/质检报告），并沉淀 SOP 与知识资产。触发词：短剧、出片、剧本→成片、shot、episode.mp4、Z-Image 定妆、H3 出镜、跑一集短剧、任务看板、sd board。
 ---
 
 # 短剧生产（本机产线）
@@ -20,7 +20,7 @@ description: 在本机（RTX 2080Ti 22G + ComfyUI :8188 + MiniMax-H3 W4A8 + Z-Im
 
 Python 一律用 `/home/a/ai-work/.venv/bin/python`（里面有 `h3turing` + `imageio-ffmpeg`）。
 
-## 六阶段（每阶段可单独重跑）
+## 七阶段（每阶段可单独重跑）
 
 ```bash
 EP=/home/a/ai-work/duanju/<episode-id>      # 一集 = 一个目录
@@ -28,6 +28,8 @@ EPY=/home/a/ai-work/.venv/bin/python
 SCRIPT=/home/a/ai-work/workspace/shortdrama/shortdrama/episode.py
 
 $EPY $SCRIPT $EP lint      # 剧本预检（毁集级错误在这里挡下，秒级）
+#   ↓ P2 台词：代码选镜、LLM 只写字（合并不覆盖）；只改文本 → 不用重渲
+$EPY /home/a/ai-work/workspace/shortdrama/tools/add_dialogue.py --root /home/a/ai-work/duanju --episode <E01>
 $EPY $SCRIPT $EP cast      # 出定妆候选图 → $EP/cast/<id>_cand{1,2,3}.png
 #   ↓ agent 看图挑人（read 工具直接看 PNG），写 $EP/cast/selection.json
 $EPY $SCRIPT $EP pick      # → $EP/cast/<id>.png（主）+ <id>_alt.png（备）
@@ -36,7 +38,7 @@ $EPY $SCRIPT $EP frames    # 每镜 1 张关键帧图（10s/镜）→ $EP/frames
 #   ↓ agent 看 $EP/qc/keyframes_sheet.png 审片：构图/人物/光线对不对
 $EPY $SCRIPT $EP render    # 逐镜出镜 → $EP/clips/NN.mp4（约 210s/镜，单镜粒度续跑）
 $EPY $SCRIPT $EP review    # 关键帧拼图 + 视频抽帧拼图 + clips/manifest.json（一屏审片）
-$EPY $SCRIPT $EP assemble  # 拼接→3x 放大→烧字幕+统一响度 → $EP/episode.mp4
+$EPY $SCRIPT $EP assemble  # 拼接→3x 放大→烧字幕+BGM+响度/亮度 → $EP/episode.mp4
 $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → $EP/report.json（阻断项退出码非 0）
 ```
 
@@ -45,21 +47,39 @@ $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → $EP/repor
 1. **写剧本**（P1）：按 `workspace/shortdrama/prompts/story.md` 的 schema 写 `$EP/story.json`。
    中英双轨；`prompt_en` 必须是英文；每镜一个 `ref` 角色；每镜加 `prompt_cn`（中文画面描述，供关键帧用）。
 2. **预检**：`lint`（秒级）——毁集级的错（中文 prompt_en、角色引用错、镜数不符）在这里挡下。
-3. **出定妆图**（P2）：跑 `cast`，然后**用 read 工具逐张看候选图**再挑：
+3. **补台词**（P2）：`tools/add_dialogue.py`。**选镜在代码、LLM 只写字、合并不覆盖**；
+   覆盖率 <15% 的集要返工。台词是短剧的主信息通道，不是装饰（实测初版 105 镜只有 17 条对白）。
+4. **出定妆图**（P3）：跑 `cast`，然后**用 read 工具逐张看候选图**再挑：
    主图 = 脸最正、最清楚、五官不被遮挡的一张；备图 = 同一张脸但角度略不同。
    把选择写进 `cast/selection.json` 再跑 `pick`。
-4. **分镜**（P3）：`shots` 阶段自动拼句式，不要手改 shots.json。
-5. **关键帧**（P3.5）：`frames`（10s/镜）→ 看 `qc/keyframes_sheet.png`：
+5. **分镜**（P4）：`shots` 阶段自动拼句式，不要手改 shots.json。
+6. **关键帧**（P4）：`frames`（10s/镜）→ 看 `qc/keyframes_sheet.png`：
    **构图/人物/光线不对，现在改是 10s，等出完视频再改是 210s**。
-6. **出镜**（P4）：`render` 直接后台跑（6 镜 ≈ 21 分钟），失败自动换 seed 重试。
+7. **出镜**（P5）：`render` 直接后台跑（35 镜 ≈ 2 小时），失败自动换 seed 重试。
    要构图完全可控就换 `render-i2v`（关键帧当首帧，代价是运镜自由度下降）。
-7. **审片**（P4.5）：`review` → `qc/review.md`（**文字审核单**：每镜一行 + 结论列）+ `qc/frames_sheet.png` + `clips/manifest.json`；废镜在这里重出。
+8. **审片**（P5）：`review` → `qc/review.md`（**文字审核单**：每镜一行 + 结论列）+ `qc/frames_sheet.png` + `clips/manifest.json`；废镜在这里重出。
    **TUI 里人看不到图**：让 agent 看图并把结论写进 `review.md` 的「结论」列，人只拍板；
    人自己要看图用 `python3 shortdrama/tview.py <job>/qc/frames_sheet.png`（终端 ANSI 彩色块）
-   或 `./sd assets serve <job-dir> --port 8092`（浏览器，图+视频）。
-8. **后期**（P5）：`assemble`（中间件会自动复用，重出 1 镜不必重拼重放大）。
-9. **质检**（P6）：`qc` + **自己看片**，把新坑写进 SOP。
+   或 `./sd studio <剧集根>`（浏览器：看板 + 审片台，图+视频）。
+9. **整集**（P6）：`assemble`（中间件会自动复用，重出 1 镜不必重拼重放大）。
+10. **质检**（P7）：`qc` + **自己看片**，把新坑写进 SOP。
 
+## 任务看板（Web 模式：阶段卡片 + 一键触发）
+
+一集渲染 ≈ 2 小时，人守着黑终端判断不了"是没在跑还是卡住了"。看板解决这件事：
+**卡片状态 = 产物在不在**，网页只做投影与触发，不执行 GPU/ffmpeg 动作（方案 §4.3 / D18）。
+
+```bash
+./sd board /home/a/ai-work/duanju --episode E01            # 看这一集的阶段卡片
+./sd board /home/a/ai-work/duanju --episode E01 --run render # 触发一个阶段（后台跑）
+./sd board /home/a/ai-work/duanju --episode E01 --stop render
+./sd studio /home/a/ai-work/duanju --port 8095               # 网页：任务看板 + 审片台
+```
+
+- 「运行中」= `logs/stage-<key>.pid` 里的 pid 还活着；输出在 `logs/stage-<key>.log`（心跳）。
+- 执行者两种：`cli`（本地命令跑确定性阶段）/ `agent`（起 `pi --print --mode json` 无头 session，
+  把任务卡当提示词交给 agent 内核跑内容决策阶段）。
+- **看板不存状态**：一切回读 job 目录（文件即状态）。
 ## 踩过的坑（别再踩）
 - **字幕：相邻重复是噪音，隔得远的重复是回环**。同一句在 ≤2 镜内重复 → 成片只烧一次；
   隔 ≥3 镜再出现 → **必须留**（E01 的"你该回来了。"在 s11/s23 是同一场戏演两遍，第二次才有分量）。

@@ -35,6 +35,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 HTML = HERE / "studio.html"
 
+from . import board                      # 任务看板（阶段卡片 + 触发，方案 §4.3/§4.4）
 # 决定文件（都在 job 目录里，agent 直接读）
 SELECTION = "cast/selection.json"
 REVIEW = "review.json"
@@ -173,6 +174,8 @@ def episode_state(job: Path) -> dict:
             st["log_tail"] = lines[-3:]
         except OSError:
             pass
+    # 任务看板：阶段卡片（状态从目录推断）+ 心跳尾
+    st["board"] = board.board(job)
     return st
 
 
@@ -335,6 +338,23 @@ class Handler(BaseHTTPRequestHandler):
                     if clip.exists():
                         clip.unlink()
             self._json({"ok": True, "written": str(job / REVIEW)})
+            return
+        if p.path == "/api/run":
+            # 触发一个阶段（看板按钮）。网页只做触发器，不自己跑 GPU/ffmpeg（方案 §4.3）
+            job = self.root / data.get("job", "")
+            if not job.is_dir():
+                self._json({"error": "job 不存在"}, 400)
+                return
+            res = board.start(job, data.get("stage", ""), data.get("mode", "cli"))
+            self._json(res, 200 if res.get("ok") else 400)
+            return
+        if p.path == "/api/stop":
+            job = self.root / data.get("job", "")
+            if not job.is_dir():
+                self._json({"error": "job 不存在"}, 400)
+                return
+            res = board.stop(job, data.get("stage", ""))
+            self._json(res, 200 if res.get("ok") else 400)
             return
         self._json({"error": "unknown endpoint"}, 404)
 

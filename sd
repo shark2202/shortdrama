@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shortdrama import assets, studio  # noqa: E402
+from shortdrama import assets, board, studio  # noqa: E402
 
 DEFAULT_DIR = assets.DEFAULT_ROOT
 
@@ -90,7 +90,30 @@ def cmd_studio(args) -> int:
         return 0
     studio.serve(root, args.series, args.host, args.port, args.token)
     return 0
+def cmd_board(args) -> int:
+    """终端版任务看板：看阶段状态 / 触发阶段（网页看板的等价物，agent 在 TUI 里用）。"""
+    root = Path(args.dir or "/home/a/ai-work/workspace/duanju").expanduser().resolve()
+    eps = sorted(p for p in root.glob(f"{args.series}_E*") if p.is_dir())
+    if args.episode:
+        # E01 同时对上横屏 D202611_001_E01 和竖屏 D202611_001_E01_P
+        eps = [p for p in eps
+               if p.name.split("_", 2)[-1] in (args.episode, args.episode + "_P")]
+    if not eps:
+        print(f"（{root} 下没有 {args.series}_E* 目录）")
+        return 1
+    for job in eps:
+        if args.run:
+            res = board.start(job, args.run, args.mode)
+            print(json.dumps(res, ensure_ascii=False, indent=2))
+            return 0 if res.get("ok") else 1
+        if args.stop:
+            print(json.dumps(board.stop(job, args.stop), ensure_ascii=False))
+            return 0
+        print(board.render_text(job))
+        print()
+    return 0
 
+    # （看板子命令的注册在 main() 里）
 
 def main(argv: list[str] | None = None) -> int:
     ap = __import__("argparse").ArgumentParser(prog="sd", description="短剧平台 CLI")
@@ -130,6 +153,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8095)
     p.add_argument("--status", action="store_true", help="只打印人已做的决定（agent 在 TUI 里用）")
     p.set_defaults(fn=cmd_studio)
+    # 任务看板：阶段状态 + 触发（网页看板的终端等价物）
+    p = sub.add_parser("board", help="任务看板：看阶段状态 / 触发阶段")
+    p.add_argument("dir", nargs="?", help="剧集根目录（默认 workspace/duanju）")
+    p.add_argument("--series", default="D202611_001")
+    p.add_argument("--episode", help="只看板某一集（如 E01）")
+    p.add_argument("--run", help="触发某个阶段（lint/cast/pick/shots/frames/render/assemble/qc/dialogue）")
+    p.add_argument("--mode", default="cli", choices=["cli", "agent"], help="执行者：本地命令 / pi-agent 内核")
+    p.add_argument("--stop", help="停掉在跑的阶段")
+    p.set_defaults(fn=cmd_board)
 
     args = ap.parse_args(argv)
     return args.fn(args)

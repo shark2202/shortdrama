@@ -355,8 +355,13 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 </tbody>
 </table>
 
+<div class="box ok" style="background:var(--ok-bg);border-color:#bfe4cf">
+<b>已实现（M8）：</b><code>shortdrama/board.py</code> = 阶段卡片 + 触发；<code>shortdrama/studio.py</code> 的「任务看板」页 + <code>POST /api/run</code>；终端等价物 <code>sd board &lt;剧集根&gt;</code>。
+卡片状态 = <b>产物在不在</b>（story.json / clips/NN.mp4 / episode.mp4 / report.json…），看板<b>不存自己的状态</b>（D11/R19）；"运行中" = <code>logs/stage-&lt;key&gt;.pid</code> 里的 pid 还活着；输出落到 <code>logs/stage-&lt;key&gt;.log</code>，网页读尾巴当心跳（R18）。
+触发有两种执行者：<b>cli</b>（直接跑本地命令，确定性阶段）/ <b>agent</b>（起 <code>pi --print --mode json</code> 无头 session，把这张任务卡当提示词交给它，内容决策阶段用）。
+</div>
 <div class="box tip">
-<b>进度可见性（v2 硬要求）：</b>每个阶段执行器必须往 <code>logs/run.log</code> 追加心跳行（如 <code>[render] shot 17 → 17.mp4 190s</code>），Web 面板直接读这个尾巴投影进度。<b>没有心跳的阶段在 Web 上就等于"卡死"</b>，人只能猜。
+<b>进度可见性（v2 硬要求）：</b>每个阶段执行器必须往阶段日志追加心跳行（如 <code>[render] shot 17 → 17.mp4 190s</code>），Web 面板读这个尾巴投影进度。<b>没有心跳的阶段在 Web 上就等于"卡死"</b>，人只能猜。
 </div>
 </section>
 
@@ -422,7 +427,7 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 <tr><td>D13</td><td>镜内无角色时走纯 t2v 工作流，不带参考图</td><td>ref2va 会把提示词强制改成 "&lt;Picture 1&gt; and &lt;Picture 2&gt; show the same character."，于是照片背面特写 / 监控回放 / 鞋尖滴水这类物镜也会被塞两张角色脸 → H3 去画人而不是画那个东西。每镜显式声明 <code>ref</code>（角色 id 或 null）</td><td>统一的单工作流（省事但物镜全废）</td></tr>
 <tr><td>D16</td><td>竖屏是**原生生成**（H3 工作流的 width/height），不是后期裁切</td><td>实测 H3 支持 portrait（352×640 出片正常，构图与 ref2va 一致性都没问题），满屏 1080×1920 无留黑；后期裁切只能保留 31% 宽度（11 个全景镜会废），或留黑 69%（画面只占 31% 屏）。本机 ffmpeg 静态构建无 drawtext，竖屏标题条与字幕条统一走 libass（一个 .ass）</td><td>横屏母版（后期裁切/留黑）</td></tr>
 <tr><td>D17</td><td>审片走本地 Web 界面（审片台），agent 在 TUI 里读人的决定</td><td>pi-agent 的 TUI <b>不能显示图片和视频</b>，而方案 §11.2 说真正的瓶颈是人工审片。审片台只读文件、写决定文件（cast/selection.json、review.json），不引数据库（D11 的延续）；「重出」= 删掉该镜 clip，下次 render 只重出这一镜</td><td>没有审片界面（靠传文件 + 口头描述）</td></tr>
-<tr><td>D18</td><td><b>Web 模式：浏览器是唯一操作面，pi-agent 是唯一执行内核</b></td><td>实跑：单集渲染 ≈ 2 小时、审片要人看图看视频，而 pi 的 TUI 两者都做不到；人守着黑终端的体验就是"任务没完成"的来源。Web 面板只做<b>投影 + 触发</b>，不碰 GPU/ffmpeg（纪律只有一份，见 §4.3）</td><td>纯 CLI 交付（D9 v1）· 网页直连 ComfyUI</td></tr>
+<tr><td>D18</td><td><b>Web 模式：浏览器是唯一操作面，pi-agent 是唯一执行内核</b></td><td>实跑：单集渲染 ≈ 2 小时、审片要人看图看视频，而 pi 的 TUI 两者都做不到；人守着黑终端的体验就是"任务没完成"的来源。Web 面板只做<b>投影 + 触发</b>，不碰 GPU/ffmpeg（纪律只有一份，见 §4.3）<br><b>落地：</b>看板卡片状态 = 产物在不在；点「运行」= 后端起子进程（<b>cli</b>：本地命令跑确定性阶段；<b>agent</b>：起 <code>pi --print --mode json</code> 无头 session，把任务卡当提示词交给内核跑内容决策阶段）</td><td>纯 CLI 交付（D9 v1）· 网页直连 ComfyUI</td></tr>
 <tr><td>D19</td><td><b>台词/字幕单列一个阶段，且是主信息通道</b></td><td>实跑：初版 3 集共 105 镜，<b>对白只有 2/7/7 条</b>——纯动作流的剧本让观众三分钟读不到信息（短剧是听觉媒介）。补台词后 30/31/32 镜（88%）。关键教训：<b>哪些镜该有台词由代码决定，LLM 只负责写内容，且合并而非覆盖</b>（第一版让 LLM 自选镜位 → 它理解成"全部留空"，还覆盖掉已有好字幕）</td><td>把台词当剧本附属品</td></tr>
 <tr><td>D20</td><td><b>关键帧先行：先审图（10s/张），再烧视频（210s/镜）</b></td><td>实跑 105 镜：构图/人物/光线对不对，用一张 10s 的图就能判断；用视频判断要 210s。审片成本差 20 倍</td><td>渲完再审（D17 v1 的做法）</td></tr>
 <tr><td>D21</td><td><b>后期三件套一起上：逐镜响度归一 + 系列级亮度统一 + BGM 情绪床</b></td><td>实跑：H3 每镜原生音轨响度差 8–20dB → 逐镜对齐到 -20 LUFS 后整片 LRA 从 20.8 降到 7.4；三集平均亮度差 25%（E01 94.6 / E02 100.6 / E03 82.0 → 统一到 90）；BGM（CC BY 4.0，署名随片）垫底把"环境音太干"补上</td><td>只做整片归一（会把动态压扁）· 不做 BGM</td></tr>
@@ -447,7 +452,8 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 ├── shortdrama/
 │   ├── episode.py            # 一集驱动：lint cast pick shots frames render review assemble qc
 │   ├── studio.py             # Web 面板：任务看板 + 审片台（D17 / D18）
-│   ├── bgm.py                # BGM 情绪床（准备 + 混音滤镜）
+│   ├── studio.py             # Web 面板：任务看板 + 审片台（D17 / D18）
+│   ├── board.py              # 阶段卡片 + 触发（看板状态只从 job 目录推断）
 │   ├── grade.py              # 亮度测量与校正（系列级统一）
 │   ├── loudness.py           # 两遍 loudnorm + 限幅链
 │   ├── vertical.py           # 竖屏派生（平行 job 目录，零代码改动）
@@ -811,7 +817,7 @@ RENDER 内部逐镜：shot_01 … shot_35，每镜独立记录状态（断点续
 <tr><td><b>M5 · 编排与调度</b></td><td>1–1.5 天</td><td><code>episode.py</code> 阶段驱动 + pi skill</td><td>一集一条命令跑完六个阶段；单镜续跑</td><td><span class="tag ok">已完成</span></td></tr>
 <tr><td><b>M6 · 质检与批量</b></td><td>1 天</td><td><code>qc</code> + <code>report.json</code> + <code>qc/review.md</code></td><td>检出黑帧/静音/削波/缺镜/响度/字幕覆盖率</td><td><span class="tag ok">已完成</span>3 集 blocking=0</td></tr>
 <tr><td><b>M7 · 台词 / 信息通道</b><br><span class="tag gray">v2 新增</span></td><td>1 天</td><td><code>tools/add_dialogue.py</code> + P2 阶段</td><td>有效字幕覆盖率 ≥ 40%；台词与有效字幕分开统计</td><td><span class="tag ok">已完成</span>30/31/32 镜（88%）</td></tr>
-<tr><td><b>M8 · Web 模式任务看板</b><br><span class="tag gray">v2 新增</span></td><td>2–3 天</td><td><code>studio.py</code> 任务看板 + Web→agent 触发 + 心跳投影</td><td>浏览器里建任务 → 逐阶段触发 → 看进度与产物；<b>网页不执行 GPU 动作</b></td><td><span class="tag mid">进行中</span>审片台已上线；看板与 agent 触发待做</td></tr>
+<tr><td><b>M8 · Web 模式任务看板</b><br><span class="tag gray">v2 新增</span></td><td>2–3 天</td><td><code>shortdrama/board.py</code> + <code>studio.py</code> 看板页 + <code>sd board</code></td><td>浏览器里建任务 → 逐阶段触发 → 看进度与产物；<b>网页不执行 GPU 动作</b>；看板不存自己的状态</td><td><span class="tag ok">已完成</span>审片台 + 看板 + cli/agent 两种触发</td></tr>
 <tr><td><b>M9 · 批量与系列化</b></td><td>1–2 天</td><td><code>sd batch</code> + 系列级质检</td><td>连续 5 集不崩；跨集亮度/响度/定妆一致</td><td><span class="tag gray">未开始</span></td></tr>
 <tr><td><b>P2（可选）· 本地配音</b></td><td>2–3 天</td><td>TTS 接入 + 对轨</td><td>台词转语音并与画面时间轴对齐</td><td><span class="tag gray">未开始</span></td></tr>
 </tbody>
@@ -901,6 +907,7 @@ H3_LISTEN=127.0.0.1 bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.loc
 <tr><td>1080p 交付上采样</td><td class="mono">python3 /home/a/ai-work/minimax-h3-turing/scripts/upscale_video.py in.mp4 out.mp4 --scale 3</td></tr>
 <tr><td>本地 LLM（剧本）</td><td class="mono">curl http://127.0.0.1:8080/v1/chat/completions -d @req.json</td></tr>
 <tr><td>pi 无头编排</td><td class="mono">pi --print --model llama-local:qwen38-27b-lynstyle "…"</td></tr>
+<tr><td>任务看板（阶段卡片 / 触发）</td><td class="mono">./sd board /home/a/ai-work/duanju --episode E01<br>./sd board /home/a/ai-work/duanju --episode E01 --run render</td></tr>
 <tr><td>一集跑完（阶段驱动）</td><td class="mono">python3 shortdrama/episode.py /home/a/ai-work/duanju/D202611_001_E01 shots frames render assemble qc</td></tr>
 <tr><td>审片 Web 面板（任务看板 + 逐镜审片）</td><td class="mono">./sd studio /home/a/ai-work/duanju --port 8095</td></tr>
 <tr><td>补台词 / 字幕（v2 P2 阶段）</td><td class="mono">python3 tools/add_dialogue.py --root /home/a/ai-work/duanju --episode E01</td></tr>
@@ -991,8 +998,8 @@ H3_LISTEN=127.0.0.1 bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.loc
 <tbody>
 <tr><td>审片台：选图 / 逐镜审片 / 看成片</td><td><span class="tag ok">已上线</span></td><td><code>./sd studio &lt;剧集根&gt; --port 8095</code>：只读投影 + 带令牌写决定（<code>cast/selection.json</code> / <code>review.json</code>），媒体接口支持 HTTP Range，手机端适配</td></tr>
 <tr><td>文字审核单（无网降级）</td><td><span class="tag ok">已上线</span></td><td><code>qc/review.md</code>：每镜一行，agent 在 TUI 里也能读</td></tr>
-<tr><td>任务看板：建任务 / 阶段进度 / 触发</td><td><span class="tag mid">M8 待做</span></td><td>看板 + 「跑这一阶段」按钮 → 起 pi 无头 session 跑该阶段（§4.4 / §7.3）</td></tr>
-<tr><td>心跳投影</td><td><span class="tag mid">M8 待做</span></td><td>读 <code>logs/run.log</code> 尾部 → 进度条 + 当前镜</td></tr>
+<tr><td>任务看板：阶段卡片 + 「跑这一阶段」</td><td><span class="tag ok">已上线</span></td><td>网页「任务看板」页（<code>studio.py</code> + <code>board.py</code>）：卡片状态 = 产物在不在；点「运行」→ 后端起子进程（<b>cli</b> 本地命令 / <b>agent</b> pi 无头 session）；「停止」杀进程组</td></tr>
+<tr><td>心跳投影</td><td><span class="tag ok">已上线</span></td><td>阶段输出落 <code>logs/stage-&lt;key&gt;.log</code>，网页读尾巴；终端等价物 <code>sd board &lt;剧集根&gt;</code>（agent 在 TUI 里也能看/触发）</td></tr>
 <tr><td>账号 / 权限 / 数据库</td><td><span class="tag no">不做</span></td><td>单机单人产线（D18 / R19）</td></tr>
 </tbody>
 </table>

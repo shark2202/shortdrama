@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>短剧审片台</title>
+<title>短剧审片台 · 任务看板</title>
 <style>
 :root{--bg:#f4f5f7;--card:#fff;--ink:#1b1f24;--muted:#6b7480;--line:#e3e6ea;--accent:#2f6fed;
 --ok:#0f7b45;--ok-bg:#e9f7ef;--bad:#c0392b;--bad-bg:#fdecea;--warn:#b26a00;--warn-bg:#fff6e5;--code-bg:#f2f4f7}
@@ -87,6 +87,7 @@ th{color:var(--muted);font-weight:600}
   <div class="tabs">
     <button data-tab="shots" class="on">分镜审片</button>
     <button data-tab="cast">定妆选图</button>
+    <button data-tab="board">任务看板</button>
     <button data-tab="ep">成片与质检</button>
   </div>
 
@@ -113,6 +114,21 @@ th{color:var(--muted);font-weight:600}
     <div class="card"><h2>成片</h2><div id="player"></div></div>
     <div class="card"><h2>质检报告</h2><div id="report"></div></div>
     <div class="card"><h2>agent 日志</h2><div class="log" id="log"></div></div>
+  </div>
+
+  <div id="tab-board" class="hide">
+    <div class="card">
+      <h2>任务看板 <span class="muted">（T0–T7：状态来自 job 目录，点「运行」触发；网页不执行 GPU 动作）</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <label class="muted">执行者</label>
+        <select id="mode">
+          <option value="cli">本地命令（确定性阶段）</option>
+          <option value="agent">pi-agent 内核（内容决策阶段）</option>
+        </select>
+        <span class="muted">渲染是长活：跑起来后这一页会显示心跳（最后几行日志）</span>
+      </div>
+      <div id="board"></div>
+    </div>
   </div>
 </div>
 
@@ -157,7 +173,7 @@ function render(){
       EP.aspect==='portrait'?'repeat(auto-fill,minmax(190px,1fr))':'repeat(auto-fill,minmax(230px,1fr))';
   document.getElementById('prog').textContent=`镜头 ${EP.clip_done}/${EP.shot_total}（${EP.pct}%）`+
       (EP.review_done?` · 已审 ${EP.review_done}`:'')+(EP.review_pending&&EP.review_pending.length?` · 待重出 ${EP.review_pending.length}`:'');
-  renderShots(); renderCast(); renderEp();
+  renderShots(); renderCast(); renderEp(); renderBoard();
 }
 
 function renderShots(){
@@ -218,7 +234,37 @@ function renderEp(){
      </tbody></table>`;
   document.getElementById('log').textContent=(EP.log_tail||[]).join('\n');
 }
-
+function renderBoard(){
+  const box=document.getElementById('board'); const rows=EP.board||[];
+  if(!rows.length){box.innerHTML='<p class="muted">没有看板信息</p>';return;}
+  box.innerHTML=rows.map(c=>{
+    const st=c.running?`<span class="tag warn">运行中</span>`
+              :(c.done?`<span class="tag ok">完成</span>`:`<span class="tag">待做</span>`);
+    const btn=c.running
+      ? `<button class="red" onclick="stopStage('${c.key}')">停止</button>`
+      : (c.manual? `<span class="muted">需先给参数</span>`
+                  : `<button class="primary" onclick="runStage('${c.key}')">运行</button>`);
+    const tail=(c.log_tail||[]).slice(-2).map(l=>esc(l)).join('\n');
+    return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px">
+      <div class="row"><strong>${esc(c.title)}</strong>${st}
+        <span class="muted">${esc(c.detail||'')}</span>
+        <span style="flex:1"></span>${btn}</div>
+      <div class="beat">${esc(c.desc||'')}</div>
+      ${tail?`<div class="log" style="margin-top:6px">${tail}</div>`:''}
+    </div>`;
+  }).join('');
+}
+async function runStage(key){
+  const mode=document.getElementById('mode').value;
+  const r=await post('/api/run',{job:EP.job,stage:key,mode});
+  if(!r.ok){alert(r.error||'启动失败');return;}
+  setTimeout(load,800);
+}
+async function stopStage(key){
+  const r=await post('/api/stop',{job:EP.job,stage:key});
+  if(!r.ok){alert(r.error||'停止失败');return;}
+  setTimeout(load,800);
+}
 function mark(k,v){ review[k]={...(review[k]||{}),verdict:v}; renderShots(); updateProgress(); }
 function note(k,v){ review[k]={...(review[k]||{}),note:v}; }
 function markAll(v){ (EP.shots||[]).forEach(s=>{const k=String(s.idx).padStart(2,'0');review[k]={...(review[k]||{}),verdict:v};}); renderShots(); updateProgress(); }
@@ -254,7 +300,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
   tab=b.dataset.tab;
-  ['shots','cast','ep'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('hide',t!==tab));
+  ['shots','cast','board','ep'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('hide',t!==tab));
 }));
 document.getElementById('ep').addEventListener('change',load);
 document.getElementById('save').addEventListener('click',save);

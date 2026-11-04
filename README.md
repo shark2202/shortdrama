@@ -80,8 +80,10 @@ $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率/字幕覆盖�
 
 - 剧本由 **pi-agent** 按 `prompts/story.md` 写（不用本地 LLM 服务，省掉一整套起停与解析）。
 - 详细步骤与踩坑：`docs/SOP-短剧生产.md`；agent 用法：`skills/shortdrama-production/SKILL.md`。
-- 审片走本地 Web（`./sd studio /home/a/ai-work/duanju --port 8095`）：选图 / 逐镜判定 / 看成片，写决定文件。
+- 审片 + 任务看板走本地 Web（`./sd studio /home/a/ai-work/duanju --port 8095`）：选图 / 逐镜判定 / 看成片 / 逐阶段触发。
+  终端等价物：`./sd board /home/a/ai-work/duanju --episode E01`（看阶段）、`--run render`（触发）。
 - 方案 v2（2026-11-04，按 3 集实跑修订）：`docs/自动化短剧平台建设方案.html` §4.3 Web 模式（pi-agent 作 agent 内核）、§4.4 阶段任务卡 T0–T7、§15.7 实测数据。
+- 实操流程：`docs/SOP-短剧生产.md`（七阶段 T0–T7 + 任务看板）。
 
 ## 静态服务（方案文档）
 

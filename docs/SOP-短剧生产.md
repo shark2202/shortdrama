@@ -26,7 +26,7 @@ nvidia-smi --query-gpu=memory.used,memory.total --format=csv
 ComfyUI 没起：`bash workspace/minimax-h3-turing/scripts/h3_launch.local.sh`（**必须**带
 `--reserve-vram 2.5 --vram-headroom 0.5 --disable-pinned-memory`，否则出黑屏）。
 
-## 2. 六阶段操作
+## 2. 七阶段操作（T0–T7）
 
 ```bash
 EP=/home/a/ai-work/duanju/D202611_001
@@ -37,11 +37,12 @@ SCRIPT=workspace/shortdrama/shortdrama/episode.py
 | 阶段 | 命令 | 产出 | 实测耗时（6 镜） | 实测耗时（35 镜 / 3 分钟） |
 |---|---|---|---|---|
 | P1 剧本 | `tools/polish.py`（本地 27B） | 分集大纲 + 中英双轨 story.json | 3–8 min/集 | 3–8 min/集（分块 12 镜/块） |
-| P2 定妆 | `$EPY $SCRIPT $EP cast` → 看图 → 写 `cast/selection.json` → `$EPY $SCRIPT $EP pick` | `cast/<id>.png` + `<id>_alt.png` | 70 s（3 候选 × 2 角色）+ 10 s/张派生 | 剧集级只出一次，3 集共用 |
-| P3 分镜 | `$EPY $SCRIPT $EP shots` | `shots.json`（含 H3 提示词 + ref 标记） | 秒级 | 秒级 |
-| P4 出镜 | `$EPY $SCRIPT $EP render` | `clips/01..NN.mp4` | **210 s/镜** | **210 s/镜**（t2v 镜 180 s） |
-| P5 后期 | `$EPY $SCRIPT $EP assemble` | `episode.mp4`（1920×1056 / 24fps） | ~1 min | ~2.5 min（3× 放大 + 烧字幕） |
-| P6 质检 | `$EPY $SCRIPT $EP qc` | `report.json` | ~30 s | ~60 s |
+| **P2 台词/字幕** | `tools/add_dialogue.py --root <剧集根> --episode E01` | 每镜 `dialogue_cn` / `subtitle_cn`（**只改文本 → 不用重渲**） | 2–5 min/集 | 2–5 min/集 |
+| P3 定妆 | `$EPY $SCRIPT $EP cast` → 看图 → 写 `cast/selection.json` → `$EPY $SCRIPT $EP pick` | `cast/<id>.png` + `<id>_alt.png` | 70 s（3 候选 × 2 角色）+ 10 s/张派生 | 剧集级只出一次，3 集共用 |
+| P4 分镜+关键帧 | `$EPY $SCRIPT $EP shots` → `$EPY $SCRIPT $EP frames` | `shots.json` + `frames/NN.png`（**先审图**） | 秒级 + 10 s/镜 | 秒级 + 10 s/镜 |
+| P5 出镜 | `$EPY $SCRIPT $EP render` | `clips/01..NN.mp4` | **210 s/镜** | **170–210 s/镜**（t2v 物镜略快） |
+| P6 整集 | `$EPY $SCRIPT $EP assemble` | `episode.mp4`（1920×1056 或 1080×1920 / 24fps） | ~1 min | ~1.5 min（逐镜归一 + 放大 + 字幕 + BGM + 亮度/响度） |
+| P7 质检 | `$EPY $SCRIPT $EP qc` | `report.json` | ~30 s | ~60 s |
 
 **一集（6 镜）≈ 25 分钟 GPU + 5 分钟 agent 交互。**
 **一集（35 镜 / 3 分钟）≈ 2.1 小时 GPU + 20 分钟 agent 交互。**
@@ -196,40 +197,84 @@ herdr TUI 没有图片与视频预览，**审核不能建立在"人肉眼看图"
 **分工原则**：agent 看图（模型侧能拿到图像）→ 把结论写进 `review.md` 的「结论」列；
 人只做**拍板**（合格/重出 + 原因），不必自己开图。这是 TUI 环境里唯一成立的审核闭环。
 
+## 2.10 任务看板（Web 模式：阶段卡片 + 一键触发）
+
+单集渲染 ≈ 2 小时，人守着黑终端没法判断"是没在跑还是卡住了"。看板就是为这个来的：
+**卡片状态 = 产物在不在**，网页只做投影与触发，不执行任何 GPU/ffmpeg 动作（方案 §4.3/D18）。
+
+```bash
+# 终端版看板（agent 在 TUI 里用；也能直接触发）
+./sd board /home/a/ai-work/duanju --episode E01
+./sd board /home/a/ai-work/duanju --episode E01 --run render        # 触发一个阶段
+./sd board /home/a/ai-work/duanju --episode E01 --stop render       # 停掉在跑的阶段
+
+# 网页看板（任务看板页 + 审片台）
+./sd studio /home/a/ai-work/duanju --port 8095
+```
+
+| 卡片 | 状态判据 | 触发命令 |
+|---|---|---|
+| T1 剧本预检 | `story.json` 在 | `episode.py <job> lint` |
+| T2 台词/字幕 | 有字幕的镜 ≥ 40% | `tools/add_dialogue.py --root <剧集根> --episode E01` |
+| T3 定妆候选 / 挑图 | `cast/*_cand*.png` / `cast/<id>.png` | `episode.py <job> cast` / `pick` |
+| T4 分镜 / 关键帧 | `shots.json` / `frames/NN.png` 齐 | `episode.py <job> shots` / `frames` |
+| T5 出镜 / 审片 | `clips/NN.mp4` 齐 / `review.json` 齐 | `episode.py <job> render` / `review` |
+| T6 整集 / T7 质检 | `episode.mp4` / `report.json` 且阻断 0 | `episode.py <job> assemble` / `qc` |
+
+- **运行中** = `logs/stage-<key>.pid` 里的 pid 还活着；输出落在 `logs/stage-<key>.log`，
+  网页读这个尾巴当心跳（没有心跳 = 页面上看着像卡死）。
+- **两种执行者**：看板的「执行者」下拉框切 `cli`（本地命令跑确定性阶段）或 `agent`
+  （起 `pi --print --mode json` 无头 session，把这张任务卡当提示词交给 agent 内核）。
+- 写操作要令牌（局域网开放时自动生成）；**看板不存状态**，一切回读 job 目录（D11/R19）。
+
 ## 3. 每阶段的"人/agent 该做什么"
 
 ### P1 剧本
 - schema 见 `prompts/story.md`。中英双轨：`prompt_en`/`sfx_en` 英文喂 H3，其余中文给人看。
 - **每镜一个 `primary` 角色**——它决定这一镜用谁的定妆图当参考。
 
-### P2 定妆图（这一步最值钱）
+### P2 台词 / 字幕（信息通道，不是装饰）
+- 实测初版 105 镜只有 17 条对白 → 观众三分钟读不到信息。**补台词是单独的一个阶段**。
+- **选镜权在代码，LLM 只写字**：`tools/add_dialogue.py` 里 `pick_targets()` 决定哪些镜要台词，
+  LLM 只负责写内容（≤16 字、不解释、不剧透、不许留空）。第一版把选镜也交给 LLM → 它全留空
+  还覆盖掉已有字幕。
+- **合并而不是覆盖**：已有字幕的镜不动（`merge()`）。
+- 只改文本 → **不用重渲**：改完跑 `shots`（秒级）→ `assemble`（1.5 min）→ `qc`。
+- 质检口径：有效字幕（去重后）与台词数**分开算**，两者都 <15% 才告警。
+### P3 定妆图（这一步最值钱）
 - 出 3 张候选 → **必须真的看图挑**（agent 用 read 工具直接看 PNG），别省这一步。
 - 挑法：主图 = 脸最正、最清楚、五官无遮挡；备图 = 同一张脸但角度略不同（给 ref2va 一点变化余地）。
 - 选择写进 `cast/selection.json`：`{"c1": {"main": "cand1", "alt": "cand2"}}`，再跑 `pick`。
 - ⚠️ **描述里不能有遮脸的元素**（见 §5）。
 
-### P3 分镜
+### P4 分镜 + 关键帧
 - 句式固定，代码拼好，别手改：
   `<Picture 1> and <Picture 2> show the same character. <动作/镜头/光线>, <风格>, natural ambient audio: <环境音>`
 - `<Picture 1>` / `<Picture 2>` = 同一角色的主图 + 备图（ref2va 的一致性来源）。
 
-### P4 出镜
+### P5 出镜
 - 后台跑（21 分钟），`clips/NN.mp4` 已存在就跳过 → **单镜粒度续跑**。
 - 失败自动换 seed 重试 ≤3 次（`SEED + idx + attempt`）。
 - **成片只用可复现档**（ref2va bypass，无缓存加速）。缓存档（FirstBlockCache/TeaCache/T8）会 fork 采样轨迹，同 seed 出不同画面。
 
-### P5 后期（顺序有讲究）
-1. concat demuxer 逐样本 copy（各镜参数一致，音轨不重编码）
-2. 3x 放大（`upscale_video.py --scale 3`，lanczos）→ 1920×1056
-3. **烧字幕**（libass + Noto Sans CJK SC，白字黑边，`FontSize=42, MarginV=56`）
-4. 音频：**两遍 loudnorm + 前后限幅**（`shortdrama/loudness.py` 的 `audio_chain_for()`）——
-   单遍不命中目标、`alimiter` 默认 `level=true` 会把限掉的电平推回去导致成片数字削波。详见 §2.8。
-5. H.264 + AAC 48kHz / CRF 18 / faststart
-
+### P6 整集（顺序有讲究）
+1. **逐镜响度归一**（`loudnorm=I=-20:TP=-3:LRA=11` → `clips/norm/`）再 concat demuxer 逐样本 copy
+   （整片归一会把动态压扁；逐镜对齐后整片 LRA 从 20.8 降到 7.4 LU）
+2. 3x 放大（`upscale_video.py --scale 3`，lanczos）→ 1920×1056；竖屏直接 scale 到 1080×1920
+3. **烧字幕**（libass + Noto Sans CJK SC，白字黑边；横屏 `FontSize=42, MarginV=56`，竖屏 `FontSize=54, MarginV=360` 避开平台 UI）
+   —— **只去相邻重复**，隔得远的重复是叙事回环保留
+4. **BGM 情绪床**（`assets/bgm.oga`，CC BY 4.0 署名随片）：`amix normalize=0`，
+   **必须走 `-filter_complex`**（`-af` 是单输入链，装不下第二路）
+5. **整片两遍 loudnorm + 限幅**（`shortdrama/loudness.py` 的 `audio_chain_for()`）——
+   单遍不命中目标；`alimiter` 必须 `level=disabled`（默认会把限掉的电平推回去）、
+   上限 **-2.0 dBFS**（`limit=0.794`）、**`attack=0.1ms`**（H3 音轨有 ~4ms 瞬态突发，
+   attack=1ms 时突发头部样本会越过 0 dBFS 被 AAC 削平）。详见 §2.8。
+6. **系列级亮度统一**（`grade.measure_brightness()` → eq 校正到 YAVG 90；三集差 25% 时不统一会跳）
+7. H.264 + AAC 48kHz / CRF 18 / faststart
 > **与建设方案 §9.5 的唯一差异**：先放大再烧字幕（方案是先烧后放大）。
 > 640×352 上烧字再放大 = 糊；1920×1056 上烧清楚得多。字幕时间轴按**实际**每镜时长排。
 
-### P6 质检
+### P7 质检
 `episode.py qc` 自动查：黑帧（blackdetect）/ 静音（silencedetect）/ 削波（volumedetect）/
 时长偏差 / 分辨率 / 帧率 / 缺镜 → `report.json`；有阻断项时退出码非 0。
 
