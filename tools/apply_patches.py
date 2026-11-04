@@ -60,10 +60,11 @@ def main() -> int:
     subdata = load(Path(a.sub)).get("suggestions", {}) if a.sub else {}
 
     def subs_for(ep_name: str) -> dict:
-        """字幕表可以是 {集: {镜: 字幕}} 或 {镜: 字幕}。"""
-        v = subdata.get(ep_name)
-        if isinstance(v, dict):
-            return v
+        """字幕表可以是 {集: {镜: 字幕}} 或 {镜: 字幕}；竖屏变体沿用横屏的表。"""
+        for key in (ep_name, ep_name[:-2] if ep_name.endswith("_P") else ep_name):
+            v = subdata.get(key)
+            if isinstance(v, dict):
+                return v
         return {} if any(isinstance(x, dict) for x in subdata.values()) else subdata
 
     plan = []
@@ -104,7 +105,11 @@ def main() -> int:
         shutil.copyfile(sf, sf.with_suffix(".json.bak"))
         dump(sf, story)
         # 摘掉要重出的镜（横竖屏都摘）
-        for sid in shots:
+        # 只摘"提示词真变了"的镜 —— 否则会误删已经渲好的片
+        for sc in story.get("scenes", []):
+            sid = sc.get("id")
+            if not any(c.startswith(f"{sid}.prompt") for c in changed):
+                continue
             idx = int(sid[1:])
             for clip in (job / "clips").glob(f"{idx:02d}.mp4"):
                 clip.unlink()

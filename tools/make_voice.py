@@ -139,7 +139,7 @@ def mix(job: Path, track: Path) -> bool:
            "-filter_complex",
            "[0:a]volume=0.45[bg];[1:a]volume=1.0[vo];"
            "[bg][vo]amix=inputs=2:normalize=0:duration=first,"
-           "loudnorm=I=-15:TP=-1.5:LRA=11,alimiter=limit=0.891:level=disabled[a]",
+           "loudnorm=I=-15:TP=-2.0:LRA=11,alimiter=limit=0.82:level=disabled[a]",
            "-map", "0:v", "-map", "[a]",
            "-c:v", "copy", "-c:a", "aac", "-ar", "48000", "-b:a", "192k",
            "-movflags", "+faststart", str(tmp)]
