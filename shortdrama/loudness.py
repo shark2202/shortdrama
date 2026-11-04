@@ -29,7 +29,7 @@ from typing import Any
 TARGET_I = -16.0
 TARGET_TP = -1.5          # 滤镜端留 0.5 dB 给 AAC 编码过冲
 TARGET_LRA = 12.0
-LIMITER = "alimiter=limit=0.841:attack=1:release=50:level=disabled"   # -1.5 dBFS：给 AAC 编码留 0.5 dB 过冲余量
+LIMITER = "alimiter=limit=0.794:attack=1:release=50:level=disabled"   # -2.0 dBFS：给 AAC 编码的 +0.5~0.6 dB 过冲留余量
 
 
 def ffmpeg() -> str:
