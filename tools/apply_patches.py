@@ -57,7 +57,14 @@ def main() -> int:
 
     data = load(Path(a.fixes))
     fixes = data.get("fixes", {})
-    subs = load(Path(a.sub)).get("suggestions", {}) if a.sub else {}
+    subdata = load(Path(a.sub)).get("suggestions", {}) if a.sub else {}
+
+    def subs_for(ep_name: str) -> dict:
+        """字幕表可以是 {集: {镜: 字幕}} 或 {镜: 字幕}。"""
+        v = subdata.get(ep_name)
+        if isinstance(v, dict):
+            return v
+        return {} if any(isinstance(x, dict) for x in subdata.values()) else subdata
 
     plan = []
     for ep, scenes in fixes.items():
@@ -68,6 +75,7 @@ def main() -> int:
                 print(f"跳过（不存在）：{job}")
                 continue
             story = load(sf)
+            subs = subs_for(name)
             changed = []
             for sc in story.get("scenes", []):
                 sid = sc.get("id")
@@ -77,7 +85,8 @@ def main() -> int:
                         if fx.get(k) and sc.get(k) != fx[k]:
                             sc[k] = fx[k]
                             changed.append(f"{sid}.{k}")
-                if sid in subs and not (sc.get("subtitle_cn") or "").strip():
+                # 只覆盖占位字幕（空 / 只有省略号），不碰已经写好的
+                if sid in subs and is_placeholder(sc.get("subtitle_cn", "")):
                     sc["subtitle_cn"] = subs[sid]
                     changed.append(f"{sid}.subtitle_cn")
             if not changed:
