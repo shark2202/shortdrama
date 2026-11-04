@@ -26,6 +26,28 @@ nvidia-smi --query-gpu=memory.used,memory.total --format=csv
 ComfyUI 没起：`bash workspace/minimax-h3-turing/scripts/h3_launch.local.sh`（**必须**带
 `--reserve-vram 2.5 --vram-headroom 0.5 --disable-pinned-memory`，否则出黑屏）。
 
+### ⚠️ 渲染前必查：有没有别的进程占着显存（今晚踩的最大的坑）
+
+```bash
+nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
+```
+
+**本地 LLM 服务（llama-server，27B ≈ 19.7GB）会常驻显存**，
+和 H3（UNET ~14GB + 文本编码器 5GB + 激活）抢同一张卡 → 渲到一半报
+`VRAM grow failed: xxx bytes`（实测差 778MB 就失败）。
+**渲染前必须停掉 LLM 服务**，渲完再起回来：
+
+```bash
+pkill -f "llama-server"        # 渲染前停（省 19.7GB）
+# 渲完再起（并行会话的 LLM 步骤要用）
+cd workspace/qwen3.8-2080ti-256k && nohup llama-server --model <gguf> ... &
+```
+
+腾显存还可以用 ComfyUI 自己的接口（但**不会**卸载动态加载的文本编码器）：
+```bash
+curl -X POST http://127.0.0.1:8188/free -d '{"unload_models":true,"free_memory":true}'
+```
+
 ## 2. 七阶段操作（T0–T7）
 
 ```bash
@@ -336,6 +358,33 @@ $FF -y -framerate 1 -pattern_type glob -i 'qc/f*.png' -vf tile=3x2 -frames:v 1 q
     `story.json` 加 `"aspect": "portrait"` → render 出 352×640、assemble 缩到 **1080×1920 满屏**。
     后期裁切/留黑只作为兜底（`shortdrama/vertical.py`）。重渲 105 镜竖屏 ≈ 6.2 h。
 
+### 21. ⚠️ **审片依据必须是成片，不是关键帧**（今晚最贵的教训）
+
+我先用**关键帧**（t2i 生成）审了 105 镜，判出"29 镜重出 + 17 镜修词"；
+改词准备烧 3 小时 GPU 时，回头看**成片抽帧**，发现：
+**成片几乎全对**（s3 真是全景、s7 陈渡不显老、s26 雨里跑的确实是女性、
+E02 五镜唇语全部正确），**真缺陷只有 6–7 镜**。
+根因：`prompt_cn` 缺失时关键帧是拿 `beat` 兜底生成的，而 H3 实际吃的是写得很细的 `prompt_en` ——
+**两条提示词路径不同，关键帧根本不能代表成片**。
+
+→ **纪律：审片只认成片抽帧（`qc/frames_sheet.png`）。**
+关键帧只能当"提示词→画面"的粗检查（而且必须补齐 `prompt_cn`），**不能用来判定成片缺陷**。
+→ 这次若没复核，省下的是 3 小时 GPU，浪费的也是 3 小时 GPU。
+
+### 22. ⚠️ **占位字幕（"……"）比没有字幕更糟**
+
+并行会话用 LLM 补台词，留了 21 条纯省略号/占位（烧出来观众只看到三个点）。
+→ 质检加一条：**`subtitle_cn` 只含省略号/标点 = 占位，必须替换**（`tools/apply_patches.py` 会只覆盖占位）。
+
+### 23. ⚠️ **画面里的模型中文会被观众读出来**
+
+扩散模型会在照片/招牌上写"像中文的乱码"，观众会真的读。
+E01 s1 的旧照片上写着与剧情无关的字（"我记得这味道…"）→ 观众会以为是线索 → **发布级事故**。
+→ 关键道具上的字要么让模型**模糊不可辨认**（提示词要显式写"no readable writing"），
+要么**后期贴真字**（像字幕一样烧）。剧本里"照片背面写着某句话"这种设计，
+**必须确认模型是否真的写对了字**，否则就是穿帮。
+→ 反过来，E01 s12/s32/s34/s35 的手写字恰好与剧情一致（"如果你看到这张照片…"）→ 白捡，
+因为**物件驱动的镜头，模型连字都能对上**。
 ## 6. 目录约定
 
 ```
