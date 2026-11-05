@@ -61,6 +61,8 @@ FPS = 24
 
 sys.path.insert(0, str(H3 / "python" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+import build_ass  # noqa: E402
 
 from shortdrama import bgm, facecheck, grade, loudness  # noqa: E402
 
@@ -492,6 +494,25 @@ def _sheet(images: list[Path], out: Path, cols: int = 3) -> Path | None:
     return out
 
 
+def _existing_verdicts(md: Path) -> dict[int, tuple[str, str]]:
+    """读回 review.md 里已填的结论（镜号 → (结论, 备注)）。"""
+    out: dict[int, tuple[str, str]] = {}
+    if not md.exists():
+        return out
+    import re
+    for ln in md.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^\| (\d+) \|", ln)
+        if not m:
+            continue
+        cells = ln.split("|")
+        if len(cells) > 9:
+            verdict = cells[8].strip().replace("*", "")
+            note = cells[9].strip()
+            if verdict and verdict != "☐合格 ☐重出" and verdict != "—":
+                out[int(m.group(1))] = (verdict, note)
+    return out
+
+
 def stage_review(job: Path) -> None:
     """审片：关键帧行 + 视频抽帧行各拼一张图，一屏看完；并写 clips/manifest.json。
 
@@ -501,6 +522,8 @@ def stage_review(job: Path) -> None:
     shots = load(job / "shots.json")["shots"]
     qc = job / "qc"
     qc.mkdir(parents=True, exist_ok=True)
+    # 保留上一轮已填的审片结论（review 阶段会被反复跑，不能把人工结论冲掉）
+    prev = _existing_verdicts(qc / "review.md")
     keyframes, frames, manifest = [], [], []
     for shot in shots:
         idx = shot["idx"]
@@ -537,7 +560,9 @@ def stage_review(job: Path) -> None:
     for m in manifest:
         lines.append(f"| {m['idx']} | {m.get('ref') or '-'} | {m.get('subtitle_cn') or '-'} | "
                      f"{m.get('keyframe') or '-'} | {m.get('clip') or '缺'} | "
-                     f"{m['duration_s']:.2f}s | {m['seed']} | ☐合格 ☐重出 | |")
+                     f"{m['duration_s']:.2f}s | {m['seed']} | "
+                     + (f"**{prev[m['idx']][0]}** | {prev[m['idx']][1]} |"
+                        if m['idx'] in prev else "☐合格 ☐重出 | |"))
     lines += [
         "",
         "## 怎么审（TUI 里看不到图也能审）",
@@ -638,15 +663,16 @@ def stage_assemble(job: Path) -> None:
             run([sys.executable, str(H3 / "scripts" / "upscale_video.py"),
                  str(concat), str(up), "--scale", "3"])
 
-    # 字幕样式：横屏贴画面底部；竖屏要避开平台 UI（底部约 250–400px 被占），
-    # 字也要更大（竖屏手机上按画幅算）
-    if aspect == "portrait":
-        style = ("FontName=Noto Sans CJK SC,FontSize=54,PrimaryColour=&H00FFFFFF,"
-                 "OutlineColour=&H00000000,BorderStyle=3,BackColour=&H90000000,"
-                 "Outline=14,Shadow=0,MarginV=360,Alignment=2")
-    else:
-        style = ("FontName=Noto Sans CJK SC,FontSize=42,PrimaryColour=&H00FFFFFF,"
-                 "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=56,Alignment=2")
+    # 字幕：**自写 ASS**（不用 ffmpeg 的 subtitles= 滤镜）。
+    # 原因（审计实测发现）：libass 把 SRT 转 ASS 时用默认 PlayResY=288，MarginV 会按 288 缩放
+    #   → 竖屏 MarginV=360 被放大成 360/288*1920 = 2400px，**字幕被推出画面，完全看不见**。
+    # 自写 ASS：PlayResX/Y = 交付分辨率，MarginV 就是真像素。
+    dw, dh = delivery_size(aspect)
+    margin_v, font_size, border = (300, 54, 3) if aspect == "portrait" else (56, 42, 1)
+    ass = build_ass.build_ass(shots, durations, dw, dh, margin_v, font_size, border)
+    (job / "subtitles.ass").write_text(ass, encoding="utf-8")
+    print(f"[assemble] ASS PlayRes={dw}x{dh} MarginV={margin_v} FontSize={font_size} "
+          f"条数={ass.count('Dialogue:')}")
     # 统一响度 + 限幅（H3 源音轨实测可能到 0 dBFS，削波必须在这里压住）
     # 统一响度：两遍 loudnorm（先测后用）+ 前后限幅。
     # 单遍 loudnorm 实测不命中目标（要 -16 得到 -18.1），且 alimiter 默认 level=true
@@ -664,7 +690,7 @@ def stage_assemble(job: Path) -> None:
     else:
         print("[assemble] 无 assets/bgm.oga，不加 BGM")
     # 系列级亮度统一：3 集平均亮度差 25%（E01=100/E02=80/E03=85），连续追剧会跳。
-    vf_parts = [f"subtitles=subtitles.srt:force_style='{style}'"]
+    vf_parts = ["ass=subtitles.ass"]
     bright = grade.measure_brightness(up)
     corr = grade.brightness_filter(bright)
     if corr:
@@ -686,6 +712,57 @@ def stage_assemble(job: Path) -> None:
             "-movflags", "+faststart", str(job / "episode.mp4")]
     run(cmd, cwd=job)
     print(f"[assemble] {job/'episode.mp4'} {probe(job/'episode.mp4')}")
+
+
+def _subtitle_visibility(job: Path, shots: list[dict], durations: list[float] | None = None) -> dict:
+    """抽帧检查字幕**是否真的在画面里**（抓 MarginV 出界这类"烧了但看不见"的问题）。
+
+    审计实测发现：竖屏用 ffmpeg `subtitles=` 滤镜时，libass 把 SRT 按 PlayResY=288
+    换算 MarginV → 360/288*1920 = 2400px，字幕被推到画面外，成片里一个字都没有，
+    而当时的 QC 只查 .srt 覆盖，不查"画面上有没有字" → 放过了。
+
+    做法：在有字幕的镜里抽帧，检查字幕带（底部安全区上方）有没有高亮文字像素。
+    """
+    ep = job / "episode.mp4"
+    if not ep.exists():
+        return {}
+    try:
+        from PIL import Image
+    except ImportError:
+        return {}
+    info = probe(ep)
+    W, H = info["w"], info["h"]
+    story = load(job / "story.json") if (job / "story.json").exists() else {}
+    portrait = story.get("aspect") == "portrait"
+    margin = 300 if portrait else 56
+    # 字幕带：底边往上 margin 附近（覆盖基线到字顶）
+    top = max(0, H - margin - 40)
+    bottom = min(H, H - margin + 160 if portrait else H - margin + 90)
+
+    starts, t = [], 0.0
+    durs = durations or []
+    for i, s in enumerate(shots):
+        starts.append(t)
+        t += durs[i] if i < len(durs) else (s.get("duration_s") or 5.2)
+
+    targets = [i for i, s in enumerate(shots) if (s.get("subtitle_cn") or "").strip()][:8]
+    tmp = job / "qc" / "_subvis.png"
+    tmp.parent.mkdir(exist_ok=True)
+    checked = visible = 0
+    for i in targets:
+        ts = starts[i] + 0.6
+        r = run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{ts:.2f}",
+                 "-i", str(ep), "-frames:v", "1", str(tmp)])
+        if r.returncode != 0 or not tmp.exists():
+            continue
+        checked += 1
+        im = Image.open(tmp).convert("L")
+        band = im.crop((0, top, W, bottom))
+        bright = sum(1 for px in band.getdata() if px > 225)
+        if bright > 150:
+            visible += 1
+    tmp.unlink(missing_ok=True)
+    return {"checked": checked, "visible": visible, "band": [top, bottom], "size": [W, H]}
 
 
 def stage_qc(job: Path) -> int:
@@ -739,9 +816,15 @@ def stage_qc(job: Path) -> int:
             add("warn", ep_path.name, f"成片时长 {info['duration']:.2f}s 与剧本 {want}s 偏差 > 0.5s")
         err = run([ffmpeg(), "-hide_banner", "-i", str(ep_path),
                    "-vf", "blackdetect=d=0.4:pix_th=0.10",
-                   "-af", "volumedetect", "-f", "null", "-"])
+                   "-af", "silencedetect=n=-50dB:d=1.0,volumedetect", "-f", "null", "-"])
         if "black_start" in err:
             add("block", ep_path.name, "成片检出黑帧")
+        # 成片级静音/削波是交付物缺陷 → 阻断（镜头级只提示，因为后期还能兜底）
+        if "silence_start" in err:
+            add("block", ep_path.name, "成片检出静音段")
+        mv = re.search(r"max_volume:\s*(-?\d+(?:\.\d+)?) dB", err)
+        if mv and float(mv.group(1)) > -0.3:
+            add("block", ep_path.name, f"成片削波 max_volume={mv.group(1)} dB")
         # 响度三项按交付标准判（比单看 max_volume 准：能看出响度偏离与动态范围过宽）
         measured = loudness.measure(ep_path)
         ep["audio_measured"] = measured
@@ -749,6 +832,32 @@ def stage_qc(job: Path) -> int:
             add(f["level"], ep_path.name, f["message"])
     else:
         add("block", ep_path.name, "没有成片")
+
+    # 成片字幕重复（规格客观项）：解析实际烧出来的 subtitles.ass，
+    # 相邻同文 = 重复（叙事回环是隔镜的，不算重复）→ 阻断
+    ass_file = job / "subtitles.ass"
+    if ass_file.exists():
+        texts = []
+        for ln in ass_file.read_text(encoding="utf-8").splitlines():
+            if ln.startswith("Dialogue:"):
+                texts.append(ln.split(",", 9)[-1].strip())
+        dup = [t for i, t in enumerate(texts) if i > 0 and t == texts[i - 1]]
+        ep["subtitle_lines_burned"] = len(texts)
+        if dup:
+            add("block", ass_file.name, f"成片字幕相邻重复 {len(dup)} 处：{dup[:2]}")
+
+    # 字幕**可见性**门禁（审计实测发现竖屏字幕被推出画面而 QC 没抓到）：
+    # 在"有字幕的镜"对应成片帧里，检查字幕带内有没有高亮文字像素。
+    # 全部镜都检不到 → 系统性问题（如 MarginV 出界）→ 阻断；个别检不到 → 提示。
+    if job / "episode.mp4" and job.exists() and (job / "episode.mp4").exists():
+        checks = _subtitle_visibility(job, shots, durations if 'durations' in dir() else [])
+        ep["subtitle_visible_checks"] = checks
+        if checks and checks["checked"] >= 3 and checks["visible"] == 0:
+            add("block", ep_path.name,
+                f"字幕不可见：{checks['checked']} 个有字幕的镜里一个都没检出字幕"
+                "（检查 ASS 的 PlayRes/MarginV 是否在画面内）")
+        elif checks and checks["visible"] == 0:
+            add("warn", ep_path.name, "字幕可见性：抽检没检出字幕（样本太少，请人工确认）")
 
     # 字幕：观众唯一能读到的信息通道。分开算两件事——
     #   有效字幕 = 去重后的 subtitle_cn（上屏信息卡 + 对白字幕）

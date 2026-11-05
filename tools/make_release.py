@@ -85,6 +85,13 @@ def probe_meta(path: Path) -> dict:
             "duration_s": round(info["duration"], 2)}
 
 
+def _episode_no(job_name: str) -> str:
+    """集数：D202611_001_E02_P → 2（竖屏变体的 _P 不能当集数）。"""
+    base = job_name[:-2] if job_name.endswith("_P") else job_name
+    tail = base.rsplit("_", 1)[-1]
+    return tail if tail.isdigit() else base
+
+
 def build_meta(job: Path, story: dict, series: dict, cover: Path | None) -> dict:
     ep = job / "episode.mp4"
     meta = {
@@ -93,7 +100,7 @@ def build_meta(job: Path, story: dict, series: dict, cover: Path | None) -> dict
         "series_logline": series.get("logline", ""),
         "genre": story.get("genre", ""),
         "episode_title": story.get("title", ""),
-        "episode_no": story.get("episode_no") or job.name.rsplit("_", 1)[-1],
+        "episode_no": story.get("episode_no") or _episode_no(job.name),
         "aspect": story.get("aspect", "landscape"),
         "video": ep.name if ep.exists() else None,
         "subtitles": "subtitles.srt",

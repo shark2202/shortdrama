@@ -113,6 +113,13 @@ python3 shortdrama/evidence.py <job>     # 证据表：qc/evidence.md（35 镜 �
 - **审片只认成片抽帧**（`qc/frames_sheet.png` / 竖屏 `qc/vf_all.png`）。关键帧只是预审工具：
   `prompt_cn` 缺失时它会拿 `beat` 兜底 → 与成片不符 → 曾导致 29 镜误判（真缺陷只有 7 镜）。
 - **每镜都要有 `prompt_cn`**（中文画面描述：景别+构图+光线+角色特征）→ 关键帧与中文审稿才有依据。
+- **字幕必须自写 ASS**（`tools/build_ass.py`）：ffmpeg 的 `subtitles=` 滤镜按 libass 默认
+  `PlayResY=288` 缩放 MarginV → 竖屏 360 变 2400px，**字幕被推出画面，一个字都没有**。
+  自写 ASS：PlayRes=交付分辨率，MarginV 是真像素（竖屏 300 / 横屏 56）。
+- **流水线阶段别覆盖人工结论**：`review` 会重写 `qc/review.md` → 已改为读回保留；
+  凡是"重建文件"的阶段都要先读旧文件。
+- **质检要查"画面上有没有"**：只查 .srt 覆盖率会放过"字幕根本没烧上"的成片；
+  `qc` 已加"字幕可见性"（抽帧看字幕带）与"成片字幕重复"（解析 ASS）门禁。
 - **TUI 里没有图片/视频预览**：别让审核依赖"人肉眼看图"。
   结论落成文字（`review.md` 的结论列），agent 看图、人拍板；人要看图用 `tview.py`（ANSI 彩色块）或资产页。
 - **定妆描述不能挡脸**：写"帽檐压低遮住眼睛"→ Z-Image 直接画出黑色眼罩，定妆图作废。
