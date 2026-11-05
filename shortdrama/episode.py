@@ -752,9 +752,12 @@ def _subtitle_visibility(job: Path, shots: list[dict], durations: list[float] | 
     checked = visible = 0
     for i in targets:
         ts = starts[i] + 0.6
-        r = run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{ts:.2f}",
+        try:
+            run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{ts:.2f}",
                  "-i", str(ep), "-frames:v", "1", str(tmp)])
-        if r.returncode != 0 or not tmp.exists():
+        except Exception:
+            continue
+        if not tmp.exists():
             continue
         checked += 1
         im = Image.open(tmp).convert("L")
