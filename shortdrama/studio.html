@@ -87,6 +87,7 @@ th{color:var(--muted);font-weight:600}
   <div class="tabs">
     <button data-tab="shots" class="on">分镜审片</button>
     <button data-tab="cast">定妆选图</button>
+    <button data-tab="screen">放映</button>
     <button data-tab="board">任务看板</button>
     <button data-tab="ep">成片与质检</button>
   </div>
@@ -114,6 +115,20 @@ th{color:var(--muted);font-weight:600}
     <div class="card"><h2>成片</h2><div id="player"></div></div>
     <div class="card"><h2>质检报告</h2><div id="report"></div></div>
     <div class="card"><h2>agent 日志</h2><div class="log" id="log"></div></div>
+  </div>
+
+  <div id="tab-screen" class="hide">
+    <div class="card">
+      <h2>放映 <span class="muted">（局域网手机/平板直接看；竖屏为主交付，横屏备用）</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <span class="muted">点海报即可播放；成片自带烧录字幕与配音</span>
+        <span style="flex:1"></span>
+        <button onclick="playAll()">连续播放</button>
+        <button onclick="stopAll()">停止</button>
+      </div>
+      <div class="grid" id="screen"></div>
+    </div>
+    <div class="card"><h2>正在播放</h2><div id="player2" class="player"></div></div>
   </div>
 
   <div id="tab-board" class="hide">
@@ -173,7 +188,7 @@ function render(){
       EP.aspect==='portrait'?'repeat(auto-fill,minmax(190px,1fr))':'repeat(auto-fill,minmax(230px,1fr))';
   document.getElementById('prog').textContent=`镜头 ${EP.clip_done}/${EP.shot_total}（${EP.pct}%）`+
       (EP.review_done?` · 已审 ${EP.review_done}`:'')+(EP.review_pending&&EP.review_pending.length?` · 待重出 ${EP.review_pending.length}`:'');
-  renderShots(); renderCast(); renderEp(); renderBoard();
+  renderShots(); renderCast(); renderEp(); renderBoard(); renderScreen();
 }
 
 function renderShots(){
@@ -254,6 +269,46 @@ function renderBoard(){
     </div>`;
   }).join('');
 }
+// 放映页：整剧海报墙（局域网手机直接看片）
+let PLAYLIST=[];
+function renderScreen(){
+  const box=document.getElementById('screen');
+  const eps=(S.episodes||[]).filter(e=>e.episode);
+  PLAYLIST=eps.map(e=>e.job);
+  if(!eps.length){box.innerHTML='<p class="muted">还没有成片</p>';return;}
+  box.innerHTML=eps.map(e=>{
+    const rel=e.release||{};
+    const poster=e.cover?`<img src="/media/${e.job}/${e.cover}" loading="lazy">`:'<div class="muted" style="padding:20px">无封面</div>';
+    const dur=e.episode&&e.episode.duration?e.episode.duration.toFixed(0)+'s':'';
+    return `<div class="shot">
+      <div class="th" style="cursor:pointer" onclick="play('${e.job}')">${poster}</div>
+      <div class="bd">
+        <div class="row"><span class="idx">${esc(rel.episode_title||e.job)}</span>
+          <span class="tag">${e.aspect==='portrait'?'竖屏':'横屏'}</span>
+          <span class="pill">${dur}</span></div>
+        <div class="beat">${esc(rel.series_title||'')} · 第 ${esc(rel.episode_no||'-')} 集</div>
+        <div class="row"><button class="primary" onclick="play('${e.job}')">播放</button>
+          <span class="muted">${e.report&&e.report.blocking?('阻断 '+e.report.blocking):'质检通过'}</span></div>
+      </div></div>`;
+  }).join('');
+}
+function play(job){
+  document.getElementById('player2').innerHTML=
+    `<video src="/media/${job}/episode.mp4" controls autoplay playsinline style="width:100%"></video>
+     <div class="muted">${job}</div>`;
+  document.getElementById('player2').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function playAll(){
+  if(!PLAYLIST.length)return;
+  let i=0;
+  const next=()=>{ if(i>=PLAYLIST.length)return; const j=PLAYLIST[i++]; play(j);
+    const v=document.querySelector('#player2 video');
+    if(v) v.onended=next; };
+  next();
+}
+function stopAll(){
+  const v=document.querySelector('#player2 video'); if(v){v.pause();}
+}
 async function runStage(key){
   const mode=document.getElementById('mode').value;
   const r=await post('/api/run',{job:EP.job,stage:key,mode});
@@ -300,7 +355,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
   tab=b.dataset.tab;
-  ['shots','cast','board','ep'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('hide',t!==tab));
+  ['shots','cast','screen','board','ep'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('hide',t!==tab));
 }));
 document.getElementById('ep').addEventListener('change',load);
 document.getElementById('save').addEventListener('click',save);

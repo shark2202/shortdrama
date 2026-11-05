@@ -156,6 +156,15 @@ def episode_state(job: Path) -> dict:
     if ep.exists():
         st["episode"] = {"file": "episode.mp4", **_probe(ep),
                          "size": ep.stat().st_size}
+    # 发布元数据 + 封面（放映页 / 上传包用）
+    mp = job / "release_meta.json"
+    if mp.exists():
+        try:
+            st["release"] = json.loads(mp.read_text(encoding="utf-8"))
+        except ValueError:
+            pass
+    cover_name = (st.get("release") or {}).get("cover") or f"cover_{job.name}.jpg"
+    st["cover"] = cover_name if (job / cover_name).exists() else None
     rp = job / "report.json"
     if rp.exists():
         try:

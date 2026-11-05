@@ -1000,6 +1000,8 @@ H3_LISTEN=127.0.0.1 bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.loc
 <tr><td>审片台：选图 / 逐镜审片 / 看成片</td><td><span class="tag ok">已上线</span></td><td><code>./sd studio &lt;剧集根&gt; --port 8095</code>：只读投影 + 带令牌写决定（<code>cast/selection.json</code> / <code>review.json</code>），媒体接口支持 HTTP Range，手机端适配</td></tr>
 <tr><td>文字审核单（无网降级）</td><td><span class="tag ok">已上线</span></td><td><code>qc/review.md</code>：每镜一行，agent 在 TUI 里也能读</td></tr>
 <tr><td>任务看板：阶段卡片 + 「跑这一阶段」</td><td><span class="tag ok">已上线</span></td><td>网页「任务看板」页（<code>studio.py</code> + <code>board.py</code>）：卡片状态 = 产物在不在；点「运行」→ 后端起子进程（<b>cli</b> 本地命令 / <b>agent</b> pi 无头 session）；「停止」杀进程组</td></tr>
+<tr><td>看片：放映页（海报墙 + 连续播放）</td><td><span class="tag ok">已上线</span></td><td>审片台「放映」页：整剧封面墙，点封面页内播放（HTTP Range 可拖进度条），「连续播放」按集序接播；局域网手机/平板直接看 → <b>内部看片的落地方式</b></td></tr>
+<tr><td>上传平台：<b>上传包</b>（不做自动上传）</td><td><span class="tag ok">已上线</span></td><td><code>tools/make_upload_pack.py</code>：每集一个目录 = 竖屏成片 + 封面 + <code>release_meta.json</code> + <code>subtitles.srt</code> + 可粘贴文案 + <code>CHECKS.md</code>（阻断/字幕覆盖/响度/峰值/人工审片未填数 + sha256 + 上传步骤）。<b>自动发布仍不做</b>（§0.4：账号/实名/风控不进脚本）</td></tr>
 <tr><td>心跳投影</td><td><span class="tag ok">已上线</span></td><td>阶段输出落 <code>logs/stage-&lt;key&gt;.log</code>，网页读尾巴；终端等价物 <code>sd board &lt;剧集根&gt;</code>（agent 在 TUI 里也能看/触发）</td></tr>
 <tr><td>账号 / 权限 / 数据库</td><td><span class="tag no">不做</span></td><td>单机单人产线（D18 / R19）</td></tr>
 </tbody>

@@ -64,8 +64,11 @@ def main() -> int:
         if not cells:
             continue
         tw = 420
-        th = [(im.resize((tw, int(im.height * tw / im.width)), Image.LANCZOS)
-               for _, o, n in cells for im in (o, n))]
+        thumbs = []
+        for _, o, n in cells:
+            for im in (o, n):
+                thumbs.append(im.resize((tw, int(im.height * tw / im.width)), Image.LANCZOS))
+        th = thumbs
         rh = max(t.height for t in th)
         sheet = Image.new("RGB", (tw * 2, rh * len(cells)), (12, 12, 12))
         for r, (_, _, _) in enumerate(cells):
