@@ -1,0 +1,44 @@
+{
+  "_说明": "按成片抽帧（真值）审出的真实缺陷镜；只改 prompt_en / prompt_cn。审片依据是成片，不是关键帧。",
+  "_真值审片": {
+    "D202611_001_E01": "重出 1（s1 照片上出现与剧情无关的可读中文，观众会读出来）· 修词 2 · 合格 32",
+    "D202611_001_E02": "重出 2（s13 画面里没有照片、s30 主体错成林晚）· 修词 7 · 合格 26",
+    "D202611_001_E03": "重出 4（s1 监控里的人不是陈渡、s2 不是监控屏前、s15『空无一人』却有人影、s23 倒影成了两人对视）· 修词 6 · 合格 25"
+  },
+  "fixes": {
+    "D202611_001_E01": {
+      "s1": {
+        "prompt_cn": "极特写：一张旧照片的表面，右下角烧焦卷曲，焦痕下露出一小块墨渍，太小太模糊完全看不清，纸面没有任何可辨认的文字，浅景深，胶片颗粒",
+        "prompt_en": "Extreme close-up of the surface of an old printed photograph, the bottom right corner charred, curled and blackened with a burn edge, a tiny smudge of ink beneath the burn, the paper surface completely blank with no readable writing of any kind, faint grey smudges too small to make out, shallow depth of field, film grain, warm tungsten light"
+      }
+    },
+    "D202611_001_E02": {
+      "s13": {
+        "prompt_cn": "特写：一张旧照片正面朝上被按在便利店柜台上，一只粗手指压住右下角把纸面压平，照片占满画面主体，照片上是白墙和一道淡划痕，暖光，浅景深",
+        "prompt_en": "Close-up of an old photograph lying face up on a convenience store counter, a thick rough finger pressing down on the bottom right corner to flatten the paper, the photograph filling most of the frame, the photo shows a blank white wall with a faint scratch, warm fluorescent light, shallow depth of field, film grain"
+      },
+      "s30": {
+        "prompt_cn": "中近景：周姐低头看着台面开口说话，红色大框老花镜反着荧光灯，洗得发白的围裙，方脸宽下颌角，眼袋浮肿，画面里只有她一个人",
+        "prompt_en": "Medium close-up of an older woman looking down at the counter as she speaks, large red-framed reading glasses reflecting the fluorescent tube, a washed-out white apron, square face with a wide jaw, puffy eye bags, only one person in frame, warm fluorescent light, film grain"
+      }
+    },
+    "D202611_001_E03": {
+      "s1": {
+        "prompt_cn": "监控画面：鱼眼畸变的监控视角，便利店玻璃门被推开，一个三十岁上下的男人浑身湿透站在门口，中分湿发，圆框眼镜镜腿缠胶带，深蓝衬衫被雨泡黑，画面轻微噪点与扫描线",
+        "prompt_en": "Surveillance camera footage with fisheye distortion and scanline noise, a convenience store glass door pushed open, a man in his early thirties standing in the doorway completely soaked, center-parted wet hair, round glasses with tape on the temple, dark blue shirt soaked black, cold blue night outside, low resolution security camera look"
+      },
+      "s2": {
+        "prompt_cn": "中近景：林晚站在监控屏幕前，屏幕暗着，玻璃面上映出她自己的倒影，她盯着屏幕里一个湿透的男人的画面，室内荧光灯冷白，浅景深",
+        "prompt_en": "Medium close-up of a young woman standing in front of a switched-off security monitor, the dark screen reflecting her own face, she stares at the frozen image of a soaked man on the screen, cold white fluorescent light, shallow depth of field, film grain"
+      },
+      "s15": {
+        "prompt_cn": "监控回放画面：空荡的便利店内部，货架整齐排满商品，日光灯嗡嗡亮着，画面里只有货架和灯光，没有任何人物，监控画面的噪点与时间码",
+        "prompt_en": "Surveillance camera footage of an empty convenience store interior, shelves neatly stocked with packaged goods, fluorescent ceiling lights humming, the frame contains only shelves and lights with no people anywhere, CCTV noise and timecode overlay, cold blue tint"
+      },
+      "s23": {
+        "prompt_cn": "特写：林晚握着钥匙站在窗前，看着玻璃上映出的自己的倒影，不对称刘海，卷起的袖子，旧疤创可贴，窗外冷雨，画面里只有她一个人的倒影",
+        "prompt_en": "Close-up of a young woman holding a key and looking at her own reflection in the rain covered shop window, asymmetric bangs, a sleeve rolled past the elbow, an old scar under a peeling band-aid, cold rain outside, only her single reflection visible in the glass, film grain"
+      }
+    }
+  }
+}
