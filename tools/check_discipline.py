@@ -38,17 +38,31 @@ IDENTITY = re.compile(r"red[- ]framed|large red|round glasses|blue uniform|white
 
 
 def check_scene(sc: dict) -> list[str]:
+    """按路线分层查纪律。
+
+    今晚的成片证据（2026-11-05，E01/E02/E03 三集复审）：
+    * 纪律 1（唇语）、2（闪回/倒影）、3（两人同框身份漂移）——**只在 t2i 关键帧成立**，
+      ref2va 成片里这些镜都是对的（E02 五个唇语镜在成片里完全正确）。
+      → 只有 ref=None（纯 t2v）的镜才按 1/2/3 报警。
+    * 纪律 4（否定约束无效）、6（画面可读文字穿帮）——**成片验证成立**，对所有镜都报警。
+    """
     en = sc.get("prompt_en", "")
     cn = sc.get("prompt_cn", "")
+    t2i = not (sc.get("ref") or sc.get("primary"))   # 无参考图 = 纯 t2v 路线
     out = []
-    if LIP.search(en):
-        out.append("纪律1 唇语/口型镜：模型会画成吃东西 → 改写为'正在说话，嘴唇张开'")
-    if ABSTRACT.search(en) or re.search(r"闪回|倒影", cn):
-        out.append("纪律2 闪回/倒影/抽象镜 → 换成具体可见的物件状态")
+    if t2i:
+        if LIP.search(en):
+            out.append("纪律1 唇语/口型镜（t2i 路线）：关键帧会画成吃东西 → 改写为'正在说话，嘴唇张开'")
+        if ABSTRACT.search(en) or re.search(r"闪回|倒影", cn):
+            out.append("纪律2 闪回/倒影/抽象镜（t2i 路线）→ 换成具体可见的物件状态")
+        if TWO_PEOPLE.search(en) and not IDENTITY.search(en):
+            out.append("纪律3 同框第二人没有辨识特征（t2i 路线）→ 写死特征（红框眼镜/白围裙/蓝制服）")
     if NEGATION.search(en) or re.search(r"空无一人|没有(任何)?人", cn):
-        out.append("纪律4 否定约束无效 → 只写存在什么（把人物描述彻底移除）")
-    if TWO_PEOPLE.search(en) and not IDENTITY.search(en):
-        out.append("纪律3 同框第二人没有辨识特征 → 写死特征（红框眼镜/白围裙/蓝制服）")
+        out.append("纪律4 否定约束无效（成片验证）→ 只写存在什么（把人物描述彻底移除）")
+    if re.search(r"照片|字迹|文字|招牌|手写", cn) and re.search(r"readable|legible|clear|visible", en, re.I):
+        # 纪律 6 不是"违规"，是"需人工确认"：画面里的可读文字如果与剧情一致是加分
+        #（E01 的"如果你看到这张照片…"模型真写出来了），不一致才是穿帮（E01 s1 原句）。
+        out.append("[需人工确认] 这镜画面里可能有可读文字 → 确认它是否与剧情一致")
     if not cn.strip():
         out.append("缺 prompt_cn：关键帧/中文审片没有依据")
     return out
@@ -58,14 +72,18 @@ def main() -> int:
     job = Path(sys.argv[1]).expanduser().resolve()
     story = json.loads((job / "story.json").read_text(encoding="utf-8"))
     hits = 0
+    manual = 0
     for sc in story.get("scenes", []):
         problems = check_scene(sc)
-        if problems:
+        real = [p for p in problems if not p.startswith("[需人工确认]")]
+        manual += len(problems) - len(real)
+        if real:
             hits += 1
             print(f"{sc['id']}:")
-            for p in problems:
+            for p in real:
                 print(f"    - {p}")
-    print(f"\n{job.name}: {len(story.get('scenes', []))} 镜中 {hits} 镜违反纪律")
+    print(f"\n{job.name}: {len(story.get('scenes', []))} 镜中 {hits} 镜违反纪律"
+          f"（另 {manual} 处需人工确认：画面可读文字是否与剧情一致）")
     return 0
 
 
