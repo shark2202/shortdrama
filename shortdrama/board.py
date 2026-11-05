@@ -88,6 +88,8 @@ def _stage_cmd(stage: str, job: Path) -> list[str]:
     root = job.parent
     if stage == "dialogue":
         return [PY, str(TOOLS / "add_dialogue.py"), "--root", str(root), "--episode", _ep(job)]
+    if stage == "evidence":
+        return [PY, str(PKG / "evidence.py"), str(job)]
     return [PY, str(EPISODE), str(job), stage]
 
 
@@ -115,6 +117,9 @@ STAGES: list[dict] = [
                           "镜头 %d/%d" % (_clips(j), len(_shots(j))))},
     {"key": "review", "title": "T5 审片", "desc": "关键帧拼图 + 成片抽帧拼图；审片台逐镜判定",
      "status": lambda j: _review_status(j)},
+    {"key": "evidence", "title": "T5 证据表（无图可打印）", "desc": "每镜的亮度/静止/关键帧PSNR/与上镜相似度 → qc/evidence.md（先看哪几镜）",
+     "status": lambda j: ((j / "qc" / "evidence.md").exists(),
+                          "已生成" if (j / "qc" / "evidence.md").exists() else "还没跑")},
     {"key": "assemble", "title": "T6 整集", "desc": "拼接 → 放大 → 烧字幕 + BGM + 响度/亮度",
      "status": lambda j: ((j / "episode.mp4").exists(),
                           "%d MB" % ((j / "episode.mp4").stat().st_size // 1048576) if (j / "episode.mp4").exists() else "还没成片")},
