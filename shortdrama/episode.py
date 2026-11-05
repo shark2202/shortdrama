@@ -736,8 +736,9 @@ def _subtitle_visibility(job: Path, shots: list[dict], durations: list[float] | 
     portrait = story.get("aspect") == "portrait"
     margin = 300 if portrait else 56
     # 字幕带：底边往上 margin 附近（覆盖基线到字顶）
-    top = max(0, H - margin - 40)
-    bottom = min(H, H - margin + 160 if portrait else H - margin + 90)
+    # 字幕底边在 H-margin，字高约 font_size → 检测带覆盖字顶到字底
+    top = max(0, H - margin - 160)
+    bottom = min(H, H - margin + 60)
 
     starts, t = [], 0.0
     durs = durations or []
