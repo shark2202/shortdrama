@@ -86,8 +86,12 @@ def probe_meta(path: Path) -> dict:
 
 
 def _episode_no(job_name: str) -> str:
-    """集数：D202611_001_E02_P → 2（竖屏变体的 _P 不能当集数）。"""
+    """集数：D202611_001_E02_P → 2；D202611_001_E02 → 2（竖屏变体的 _P 不能当集数）。"""
+    import re
     base = job_name[:-2] if job_name.endswith("_P") else job_name
+    m = re.search(r"E(\d+)$", base)
+    if m:
+        return str(int(m.group(1)))
     tail = base.rsplit("_", 1)[-1]
     return tail if tail.isdigit() else base
 
