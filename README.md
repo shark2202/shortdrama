@@ -109,4 +109,5 @@ PORT=8092 bash docs/serve.sh
 - 产物旁挂 `<file>.json`（sidecar）时，页面直接显示该次运行的 seed / tier / 耗时
 - **页面不写任何东西**：挑图、审片的选择仍写回 job 目录里的文件
 
-测试：`python3 -m unittest discover -s shortdrama/tests`
+测试（**必须用 .venv 的 python**：部分测试要 imageio-ffmpeg 提供的 ffmpeg，系统 python3 没装会报错）：
+`/home/a/ai-work/.venv/bin/python -m unittest discover -s shortdrama/tests`

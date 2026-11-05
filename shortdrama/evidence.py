@@ -40,8 +40,14 @@ def ffmpeg() -> str:
         return imageio_ffmpeg.get_ffmpeg_exe()
     except Exception:
         import shutil
+        from pathlib import Path
         exe = shutil.which("ffmpeg")
         if not exe:
+            # 静态构建在 imageio-ffmpeg 的包里（独立 venv），系统 python3 里也能找到
+            for root in ("/home/a/ai-work/.venv", "/home/a/ai-work/ComfyUI/.venv"):
+                hits = sorted(Path(root).glob("lib/python*/site-packages/imageio_ffmpeg/binaries/ffmpeg-*"))
+                if hits:
+                    return str(hits[0])
             raise SystemExit("找不到 ffmpeg")
         return exe
 
