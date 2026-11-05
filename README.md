@@ -11,10 +11,12 @@
 | 目录 | 内容 |
 |---|---|
 | `docs/` | 建设方案 HTML（设计权威源）+ `SOP-短剧生产.md`（实操 SOP） |
-| `shortdrama/` | 主代码包：`episode.py`（一集六阶段驱动）`assets.py`（产物清单/静态页） |
+| `shortdrama/` | 主代码包：`episode.py`（一集七阶段驱动）、`assets.py`（产物清单/静态页）、`studio.py`/`board.py`（审片 Web / 看板）、`loudness.py`/`grade.py`/`bgm.py`（响度/亮度/BGM）、`facecheck.py`/`textcheck.py`（角色与剧本检查）、`tview.py`（终端看图） |
 | `prompts/` | 提示词模板（剧本 schema / 定妆出图） |
+| `tools/` | 运维与发布工具：`make_voice.py`（TTS 配音对轨）、`make_release.py`（封面/元数据/发布清单）、`build_ass.py`（精确安全区字幕）、`check_discipline.py`（提示词纪律机器检查）、`apply_patches.py`（审片结论落数据）、`compare_old_new.py`/`rollback_shots.py`（重出新旧复审与回滚）、`gpu_watch*.py`（显卡值班）、`release_all.sh`（一键发布流水线） |
+| `patches/` | 归档的补丁与审片结论（改词/补字幕/逐镜结论表），供复现 |
 | `skills/` | pi-agent skill：`shortdrama-production/SKILL.md`（已软链到 `~/.pi/agent/skills/`） |
-| `jobs/` | 任务目录，一集一个子目录（`story.json` / `shots.json` / `cast/` / `clips/` / `episode.mp4` / `report.json`） |
+| `jobs/` | 预留的任务目录（**实际任务在 `/home/a/ai-work/duanju/`**：一集一个子目录，含 `story.json` / `shots.json` / `cast/` / `frames/` / `clips/` / `voice/` / `episode.mp4` / `report.json` / `qc/review.md` / `cover_*.jpg` / `release_meta.json`） |
 | `logs/` | 运行日志 |
 
 ## 复用（不重复造轮子）
@@ -39,6 +41,12 @@
 | M5 | 1–1.5 天 | `job.py` + `gate.py` + `sd` CLI：一条命令出片 + 显存门控 |
 | M6 | 1 天 | `qc.py` + `sd batch`：质检黑帧/静音/削波/缺镜，批量 5 集 |
 | P2（可选） | 2–3 天 | 本地 TTS 配音 + 对轨 |
+
+**当前状态（2026-11-05 实测）**：M1–M6 的能力已由 `shortdrama/episode.py` 一条流水线覆盖
+（cast/pick/shots/frames/render/review/assemble/qc 八阶段），另有 `tools/` 提供 TTS 配音、
+发布打包、纪律检查；**已实跑产出 3 集 × 35 镜 × 两画幅 = 6 个成片**（`/home/a/ai-work/duanju/`）。
+P2（本地 TTS 配音）**已做**（Kokoro-82M，见 `tools/make_voice.py`）。
+未做：批量 5 集的自动排期、GPU 显存门控（靠"渲染前停 LLM 进程"的纪律代替）。
 
 ## 常用命令
 
