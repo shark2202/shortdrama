@@ -1,0 +1,17 @@
+{
+  "_说明": "竖屏复审后的 2 处修正（横竖同步重出）：E02 s12 出成大笑脸（设定是沉默的唇语）；E03 s23 竖屏出成咬钥匙（设定是看玻璃倒影）。",
+  "fixes": {
+    "D202611_001_E02": {
+      "s12": {
+        "prompt_cn": "极特写：周姐正在说话，只拍下半张脸（嘴到下巴），嘴唇张开，眼镜下缘在画面上沿，方脸宽下颌角，法令纹深",
+        "prompt_en": "Extreme close-up of the lower half of an older woman's face as she speaks, her lips open and forming words, the bottom rim of large red-framed glasses at the top of the frame, square jaw, deep nasolabial folds, warm fluorescent light, film grain"
+      }
+    },
+    "D202611_001_E03": {
+      "s23": {
+        "prompt_cn": "特写：林晚握着钥匙站在窗前，低头看着手里那把小钥匙，窗外冷雨，玻璃上映着她模糊的轮廓，不对称刘海，卷起的袖子",
+        "prompt_en": "Close-up of a young woman holding a small metal key and looking down at it, standing beside a rain covered shop window, her blurred outline faintly visible in the glass, asymmetric bangs, a sleeve rolled past the elbow, cold rain outside, warm interior light, film grain"
+      }
+    }
+  }
+}
