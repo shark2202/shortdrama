@@ -762,11 +762,60 @@ def _subtitle_visibility(job: Path, shots: list[dict], durations: list[float] | 
         checked += 1
         im = Image.open(tmp).convert("L")
         band = im.crop((0, top, W, bottom))
-        bright = sum(1 for px in band.getdata() if px > 225)
-        if bright > 150:
+        px = list(band.getdata())
+        if band_has_text(px, W):
             visible += 1
     tmp.unlink(missing_ok=True)
     return {"checked": checked, "visible": visible, "band": [top, bottom], "size": [W, H]}
+
+def band_has_text(px: list[int], width: int) -> bool:
+    """字幕带里有没有**文字**（而不是"有没有亮像素"）。
+
+    踩过的坑（都是实测）：
+    1. 固定阈值 >225 会**误报**：整集亮度校正（eq=brightness）把白字从 255 压到 225，
+       于是"有字幕"被判成"无字幕"（E02_P，亮度 -10.4% -> 假阻断）。
+    2. 纯亮像素计数会**漏判**：亮场景（白墙/灯）整片过阈值 -> 误判"有字幕"。
+    3. 只看"笔画占比"会**误报**：真实字幕帧里场景本身有亮区，亮像素总数被抬高，
+       笔画占比被稀释（实测 300/37562 = 0.008）。
+
+    判据（四条同时成立才算文字）：
+      - 亮像素数 > 150（一个字都不该只有这么点）
+      - 亮像素占比 < 0.35（文字不占满整条带）
+      - **笔画像素** > 120：亮像素且紧挨着暗像素（笔画/描边/黑框）
+      - **横向跳变数** > 250：文字每一行有多个笔画 -> 亮暗交替很多；
+        灯/高光是一整块实心 -> 每行只有两条边（跳变少）
+    阈值自适应：thr = max(160, 带内最亮值 - 45)。
+    """
+    if not px or width <= 0:
+        return False
+    rows = len(px) // width
+    band_max = max(px)
+    thr = max(160, band_max - 45)
+    bright_idx = [i for i, p in enumerate(px) if p > thr]
+    if len(bright_idx) <= 150:
+        return False
+    if len(bright_idx) > 0.35 * len(px):
+        return False
+    strokes = 0
+    for i in bright_idx:
+        y, x = divmod(i, width)
+        for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if 0 <= nx < width and 0 <= ny < rows:
+                if px[ny * width + nx] < thr - 60:
+                    strokes += 1
+                    break
+    if strokes <= 120:
+        return False
+    transitions = 0
+    for y in range(rows):
+        base = y * width
+        prev = px[base] > thr
+        for x in range(1, width):
+            cur = px[base + x] > thr
+            if cur != prev:
+                transitions += 1
+                prev = cur
+    return transitions > 250
 
 
 def stage_qc(job: Path) -> int:
@@ -778,12 +827,15 @@ def stage_qc(job: Path) -> int:
     def add(level, where, msg):
         findings.append({"level": level, "where": where, "message": msg})
 
+    clip_durations: list[float] = []          # 实际每镜时长（字幕可见性抽样要用，别用剧本时长）
     for shot in shots:
         clip = job / "clips" / f"{shot['idx']:02d}.mp4"
         if not clip.exists():
             add("block", clip.name, "缺镜头")
+            clip_durations.append(0.0)
             continue
         info = probe(clip)
+        clip_durations.append(info.get("duration", 0.0))
         want = shot.get("duration_s") or 0
         if abs(info["duration"] - want) > 0.5:
             add("warn", clip.name, f"时长 {info['duration']:.2f}s 与剧本 {want}s 偏差 > 0.5s")
@@ -854,7 +906,7 @@ def stage_qc(job: Path) -> int:
     # 在"有字幕的镜"对应成片帧里，检查字幕带内有没有高亮文字像素。
     # 全部镜都检不到 → 系统性问题（如 MarginV 出界）→ 阻断；个别检不到 → 提示。
     if job / "episode.mp4" and job.exists() and (job / "episode.mp4").exists():
-        checks = _subtitle_visibility(job, shots, durations if 'durations' in dir() else [])
+        checks = _subtitle_visibility(job, shots, clip_durations)
         ep["subtitle_visible_checks"] = checks
         if checks and checks["checked"] >= 3 and checks["visible"] == 0:
             add("block", ep_path.name,
