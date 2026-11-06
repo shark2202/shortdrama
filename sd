@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shortdrama import assets, board, studio  # noqa: E402
+from shortdrama import approval, assets, board, studio  # noqa: E402
 
 DEFAULT_DIR = assets.DEFAULT_ROOT
 
@@ -90,6 +90,23 @@ def cmd_studio(args) -> int:
         return 0
     studio.serve(root, args.series, args.host, args.port, args.token)
     return 0
+def cmd_approval(args) -> int:
+    """交付审批（本地审批层）：客观门禁 + 人工签核 + 留痕。"""
+    job = Path(args.job).expanduser().resolve()
+    action = ("submit" if args.submit else "approve" if args.approve
+              else "reject" if args.reject else None)
+    if action:
+        res = approval.act(job, action, args.by or "unknown", args.note, args.items)
+        if not res.get("ok"):
+            print(f"❌ {res.get('error')}")
+            approval.write_md(job)
+            return 1
+        print(f"✅ {action} → 状态 {res['state']}")
+    approval.write_md(job)
+    print(approval.render_md(job))
+    return 0
+
+
 def cmd_board(args) -> int:
     """终端版任务看板：看阶段状态 / 触发阶段（网页看板的等价物，agent 在 TUI 里用）。"""
     root = Path(args.dir or "/home/a/ai-work/workspace/duanju").expanduser().resolve()
@@ -153,6 +170,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8095)
     p.add_argument("--status", action="store_true", help="只打印人已做的决定（agent 在 TUI 里用）")
     p.set_defaults(fn=cmd_studio)
+    # 交付审批：提交 / 批准 / 驳回（本地审批层）
+    p = sub.add_parser("approval", help="交付审批：提交 / 批准 / 驳回 / 查看")
+    p.add_argument("job", help="集目录")
+    p.add_argument("--submit", action="store_true")
+    p.add_argument("--approve", action="store_true")
+    p.add_argument("--reject", action="store_true")
+    p.add_argument("--by", default="")
+    p.add_argument("--note", default="")
+    p.add_argument("--items", nargs="*")
+    p.set_defaults(fn=cmd_approval)
+
     # 任务看板：阶段状态 + 触发（网页看板的终端等价物）
     p = sub.add_parser("board", help="任务看板：看阶段状态 / 触发阶段")
     p.add_argument("dir", nargs="?", help="剧集根目录（默认 workspace/duanju）")

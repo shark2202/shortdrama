@@ -81,6 +81,20 @@ $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率 → $EP/repor
   把任务卡当提示词交给 agent 内核跑内容决策阶段）。
 - **看板不存状态**：一切回读 job 目录（文件即状态）。
 
+## 交付审批（本地审批层）
+
+```bash
+sd approval <job>                          # 审批单（qc/approval.md）
+sd approval <job> --submit --by agent
+sd approval <job> --approve --by director --note "过"
+sd approval <job> --reject --by director --note "s23 咬钥匙" --items 23
+```
+
+审批 = **客观门禁 + 人工签核 + 留痕**（`approval.json` + `logs/approval.log` + `qc/approval.md`）。
+三条硬规则：① **批准时重跑客观门禁**（质检阻断/逐镜审片/证据表/交付件/字幕覆盖），
+不过就批不出去；② 驳回必须写理由或镜号；③ **成片或 clip 在批准后被改动 → 批准自动失效**
+（否则"已批准"是句空话）。网页：审片台「交付审批」页签。
+
 ## 无图环境（SSH/TUI）怎么评审
 
 专家的循环是 **假设 → 取证 → 归因 → 取舍**，只有"取证"需要眼睛。把取证自动化，

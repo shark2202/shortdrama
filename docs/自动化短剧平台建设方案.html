@@ -352,6 +352,7 @@ P6 质检     ffprobe + 脚本      无            < 1 分钟
 <tr><td><b>T5 分段镜头</b></td><td>agent（GPU）</td><td><code>shots.json</code> + <code>cast/</code></td><td><code>clips/NN.mp4</code>（单镜粒度续跑）</td><td>每镜 5.17s / 640×352 / 有音轨 / 非黑帧</td><td>单镜重试 ≤3 且换 seed；失败镜标 redo 等人重出</td></tr>
 <tr><td><b>T5 证据表</b><br><span class="tag gray">v2 新增</span></td><td>agent（CPU）</td><td><code>clips/</code> + <code>frames/</code></td><td><code>qc/evidence.md</code>：每镜亮度/静止/关键帧 PSNR/与上镜相似度 + "先看这 N 镜"</td><td><b>无图环境也能定位可疑镜</b>（SSH/TUI 评审入口）</td><td>回 T5 审片</td></tr>
 <tr><td><b>T6 整集</b></td><td>agent（CPU）</td><td><code>clips/</code> + <code>shots.json</code></td><td><code>episode.mp4</code> + <code>subtitles.srt</code></td><td>1920×1056 / 24fps / I=-16 LUFS±1 / 峰值 ≤ -1.0 dBFS / LRA ≤ 12</td><td>回 T5 只重出问题镜</td></tr>
+<tr><td><b>T8 交付审批</b><br><span class="tag gray">v2 新增</span></td><td>人（导演/发行）</td><td><code>report.json</code> + <code>qc/review.md</code> + <code>qc/evidence.md</code> + 交付件</td><td><code>approval.json</code>（状态机 + 决议轮次）+ <code>logs/approval.log</code>（流水）</td><td>批准时客观门禁全过；成片改动后批准自动失效</td><td>驳回 → changes_requested（必须写理由/镜号）</td></tr>
 <tr><td><b>T7 质检</b></td><td>agent</td><td>成片 + 源镜</td><td><code>report.json</code> + <code>qc/review.md</code></td><td>blocking = 0</td><td>阻断项按 <code>where</code> 指回具体镜</td></tr>
 </tbody>
 </table>
@@ -1002,6 +1003,7 @@ H3_LISTEN=127.0.0.1 bash /home/a/ai-work/minimax-h3-turing/scripts/h3_launch.loc
 <tr><td>任务看板：阶段卡片 + 「跑这一阶段」</td><td><span class="tag ok">已上线</span></td><td>网页「任务看板」页（<code>studio.py</code> + <code>board.py</code>）：卡片状态 = 产物在不在；点「运行」→ 后端起子进程（<b>cli</b> 本地命令 / <b>agent</b> pi 无头 session）；「停止」杀进程组</td></tr>
 <tr><td>看片：放映页（海报墙 + 连续播放）</td><td><span class="tag ok">已上线</span></td><td>审片台「放映」页：整剧封面墙，点封面页内播放（HTTP Range 可拖进度条），「连续播放」按集序接播；局域网手机/平板直接看 → <b>内部看片的落地方式</b></td></tr>
 <tr><td>上传平台：<b>上传包</b>（不做自动上传）</td><td><span class="tag ok">已上线</span></td><td><code>tools/make_upload_pack.py</code>：每集一个目录 = 竖屏成片 + 封面 + <code>release_meta.json</code> + <code>subtitles.srt</code> + 可粘贴文案 + <code>CHECKS.md</code>（阻断/字幕覆盖/响度/峰值/人工审片未填数 + sha256 + 上传步骤）。<b>自动发布仍不做</b>（§0.4：账号/实名/风控不进脚本）</td></tr>
+<tr><td>交付审批（本地审批层）</td><td><span class="tag ok">已上线</span></td><td><code>shortdrama/approval.py</code> / <code>sd approval</code> / 审片台「交付审批」页：状态机 pending→submitted→approved（驳回回 changes_requested）；<b>批准时重跑客观门禁</b>（质检阻断/逐镜审片/证据表/交付件/字幕覆盖），不过就批不出去；驳回必须给理由或镜号；<b>成片或 clip 在批准后被改 → 批准自动失效</b>；留痕 <code>approval.json</code> + <code>logs/approval.log</code> + <code>qc/approval.md</code></td></tr>
 <tr><td>心跳投影</td><td><span class="tag ok">已上线</span></td><td>阶段输出落 <code>logs/stage-&lt;key&gt;.log</code>，网页读尾巴；终端等价物 <code>sd board &lt;剧集根&gt;</code>（agent 在 TUI 里也能看/触发）</td></tr>
 <tr><td>账号 / 权限 / 数据库</td><td><span class="tag no">不做</span></td><td>单机单人产线（D18 / R19）</td></tr>
 </tbody>

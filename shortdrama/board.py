@@ -90,6 +90,8 @@ def _stage_cmd(stage: str, job: Path) -> list[str]:
         return [PY, str(TOOLS / "add_dialogue.py"), "--root", str(root), "--episode", _ep(job)]
     if stage == "evidence":
         return [PY, str(PKG / "evidence.py"), str(job)]
+    if stage == "approval":
+        return [PY, str(PKG / "approval.py"), str(job), "--show"]
     return [PY, str(EPISODE), str(job), stage]
 
 
@@ -123,6 +125,8 @@ STAGES: list[dict] = [
     {"key": "assemble", "title": "T6 整集", "desc": "拼接 → 放大 → 烧字幕 + BGM + 响度/亮度",
      "status": lambda j: ((j / "episode.mp4").exists(),
                           "%d MB" % ((j / "episode.mp4").stat().st_size // 1048576) if (j / "episode.mp4").exists() else "还没成片")},
+    {"key": "approval", "title": "T8 交付审批", "desc": "客观门禁 + 人工签核 + 留痕（approval.json）",
+     "status": lambda j: _approval_status(j)},
     {"key": "qc", "title": "T7 质检", "desc": "黑帧/静音/削波/缺镜/响度/字幕覆盖率 → report.json",
      "status": lambda j: _qc_status(j)},
 ]
@@ -164,6 +168,21 @@ def _review_status(job: Path) -> tuple[bool, str]:
     done = sum(1 for v in rv.values() if isinstance(v, dict) and v.get("verdict"))
     redo = sum(1 for v in rv.values() if isinstance(v, dict) and v.get("verdict") == "redo")
     return (total > 0 and done >= total and redo == 0, "已审 %d/%d · 待重出 %d" % (done, total, redo))
+
+
+def _approval_status(job: Path) -> tuple[bool, str]:
+    """交付审批状态（approval.json）：只有 approved 才算"批过了"。"""
+    p = job / "approval.json"
+    if not p.exists():
+        return False, "未提交"
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except ValueError:
+        return False, "approval.json 读不出来"
+    state = d.get("state", "?")
+    label = {"approved": "已批准", "submitted": "已提交待批",
+             "changes_requested": "已驳回待改", "pending": "待提交"}.get(state, state)
+    return state == "approved", label
 
 
 def _qc_status(job: Path) -> tuple[bool, str]:

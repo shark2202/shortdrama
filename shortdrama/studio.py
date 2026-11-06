@@ -35,7 +35,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 HTML = HERE / "studio.html"
 
-from . import board                      # 任务看板（阶段卡片 + 触发，方案 §4.3/§4.4）
+from . import approval, board            # 审批层 + 任务看板（方案 §4.3/§4.4）
 # 决定文件（都在 job 目录里，agent 直接读）
 SELECTION = "cast/selection.json"
 REVIEW = "review.json"
@@ -163,6 +163,17 @@ def episode_state(job: Path) -> dict:
             st["release"] = json.loads(mp.read_text(encoding="utf-8"))
         except ValueError:
             pass
+    # 交付审批状态（本地审批层）
+    ap = job / "approval.json"
+    if ap.exists():
+        try:
+            ad = json.loads(ap.read_text(encoding="utf-8"))
+            st["approval"] = {"state": ad.get("state"), "by": (ad.get("rounds") or [{}])[-1].get("by"),
+                              "at": ad.get("updated_at"), "rounds": len(ad.get("rounds") or [])}
+        except ValueError:
+            st["approval"] = {"state": "?"}
+    else:
+        st["approval"] = {"state": "pending"}
     cover_name = (st.get("release") or {}).get("cover") or f"cover_{job.name}.jpg"
     st["cover"] = cover_name if (job / cover_name).exists() else None
     rp = job / "report.json"
@@ -355,6 +366,21 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": "job 不存在"}, 400)
                 return
             res = board.start(job, data.get("stage", ""), data.get("mode", "cli"))
+            self._json(res, 200 if res.get("ok") else 400)
+            return
+        if p.path == "/api/approval":
+            # 交付审批：提交 / 批准 / 驳回（客观门禁在批准那一刻重跑）
+            job = self.root / data.get("job", "")
+            if not job.is_dir():
+                self._json({"error": "job 不存在"}, 400)
+                return
+            action = data.get("action", "")
+            if action not in ("submit", "approve", "reject"):
+                self._json({"error": "action 必须是 submit/approve/reject"}, 400)
+                return
+            res = approval.act(job, action, data.get("by", "web"),
+                               data.get("note", ""), data.get("items"))
+            approval.write_md(job)
             self._json(res, 200 if res.get("ok") else 400)
             return
         if p.path == "/api/stop":

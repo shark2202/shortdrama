@@ -599,6 +599,43 @@ python3 tools/make_upload_pack.py --root ... --episode E03_P --zip   # 单集 + 
 
 > 上传包是**快照**：成片重压后必须重新生成，否则包里是旧成片。
 
+### 9.2 交付审批（本地审批层）
+
+前面三层各管一段：证据表管"找异常"、审片单管"逐镜判定"、上传包管"发布前自检"。
+**缺的那一层是"这一集批了没有"**——谁签的、依据什么、驳回理由是什么、批完之后内容又改了怎么办。
+
+所以审批 = **客观门禁 + 人工签核 + 留痕**：
+
+```bash
+sd approval <job>                          # 看审批单（qc/approval.md）
+sd approval <job> --submit --by agent      # 提交待批
+sd approval <job> --approve --by director --note "过"
+sd approval <job> --reject --by director --note "s23 咬钥匙" --items 23
+# 网页：审片台「交付审批」页签，三个按钮 + 决议历史
+```
+
+状态机（文件即状态，`approval.json`）：
+
+```
+pending ──submit──▶ submitted ──approve──▶ approved
+                      │  ▲
+                reject│  │submit（改完再交）
+                      ▼  │
+              changes_requested
+```
+
+三条硬规则：
+
+1. **批准时重跑客观门禁**（不信提交时的快照）：质检阻断 / 逐镜审片（未通过 + 未填）/
+   证据表 / 交付件齐全 / 字幕覆盖 —— 任一不过**批准被拒**，并写明是哪一项。
+   这条把"审批"和"检查"焊死：审片单是空模板就批不出去。
+2. **驳回必须给理由或镜号**（`--note` / `--items`），否则拒绝执行。
+3. **批准会自己失效**：批准之后成片或 clip 被改动 → 状态自动回落到 `pending`
+   （`logs/approval.log` 留一行 `auto-reset`）。否则"已批准"会变成一句空话。
+
+留痕：`approval.json`（当前状态 + 全部决议轮次）+ `logs/approval.log`（只增不改的流水）
++ `qc/approval.md`（人读审批单：门禁表 + 决议历史 + 改状态的命令）。
+
 协作闭环（状态全在文件里，无数据库）：
 
 ```

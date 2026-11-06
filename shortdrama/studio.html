@@ -88,6 +88,7 @@ th{color:var(--muted);font-weight:600}
     <button data-tab="shots" class="on">分镜审片</button>
     <button data-tab="cast">定妆选图</button>
     <button data-tab="screen">放映</button>
+    <button data-tab="approval">交付审批</button>
     <button data-tab="board">任务看板</button>
     <button data-tab="ep">成片与质检</button>
   </div>
@@ -129,6 +130,20 @@ th{color:var(--muted);font-weight:600}
       <div class="grid" id="screen"></div>
     </div>
     <div class="card"><h2>正在播放</h2><div id="player2" class="player"></div></div>
+  </div>
+
+  <div id="tab-approval" class="hide">
+    <div class="card">
+      <h2>交付审批 <span class="muted">（客观门禁 + 人工签核 + 留痕；批准时门禁会重跑）</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <input id="apBy" placeholder="决议人" value="director" style="max-width:140px">
+        <input id="apNote" placeholder="理由（驳回必填）" style="flex:1;min-width:160px">
+        <button class="primary" onclick="apAction('submit')">提交待批</button>
+        <button class="ok" onclick="apAction('approve')">批准</button>
+        <button class="red" onclick="apAction('reject')">驳回</button>
+      </div>
+      <div id="approval"></div>
+    </div>
   </div>
 
   <div id="tab-board" class="hide">
@@ -188,7 +203,7 @@ function render(){
       EP.aspect==='portrait'?'repeat(auto-fill,minmax(190px,1fr))':'repeat(auto-fill,minmax(230px,1fr))';
   document.getElementById('prog').textContent=`镜头 ${EP.clip_done}/${EP.shot_total}（${EP.pct}%）`+
       (EP.review_done?` · 已审 ${EP.review_done}`:'')+(EP.review_pending&&EP.review_pending.length?` · 待重出 ${EP.review_pending.length}`:'');
-  renderShots(); renderCast(); renderEp(); renderBoard(); renderScreen();
+  renderShots(); renderCast(); renderEp(); renderBoard(); renderScreen(); renderApproval();
 }
 
 function renderShots(){
@@ -268,6 +283,28 @@ function renderBoard(){
       ${tail?`<div class="log" style="margin-top:6px">${tail}</div>`:''}
     </div>`;
   }).join('');
+}
+// 交付审批页
+const APSTATE={pending:'待提交',submitted:'已提交待批',changes_requested:'已驳回待改',approved:'已批准'};
+function renderApproval(){
+  const box=document.getElementById('approval');
+  const a=EP.approval||{state:'pending'};
+  const st=a.state||'pending';
+  const tone=st==='approved'?'ok':(st==='changes_requested'?'bad':'warn');
+  box.innerHTML=`<div class="row" style="margin-bottom:8px">
+      <span class="tag ${tone}">${APSTATE[st]||st}</span>
+      <span class="muted">${a.by?('最后决议 '+a.by+' · '+(a.at||'')):''}</span>
+      <span class="muted">共 ${a.rounds||0} 次决议</span></div>
+    <div class="muted" style="margin-bottom:8px">批准时会重跑客观门禁（质检阻断 / 逐镜审片 / 证据表 / 交付件 / 字幕覆盖）；
+      成片或 clip 在批准后被改动 → 批准自动失效。</div>`;
+}
+async function apAction(action){
+  const by=document.getElementById('apBy').value.trim()||'web';
+  const note=document.getElementById('apNote').value.trim();
+  const r=await post('/api/approval',{job:EP.job,action,by,note});
+  if(!r.ok){alert(r.error||'操作失败');return;}
+  document.getElementById('apNote').value='';
+  load();
 }
 // 放映页：整剧海报墙（局域网手机直接看片）
 let PLAYLIST=[];
@@ -355,7 +392,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
   tab=b.dataset.tab;
-  ['shots','cast','screen','board','ep'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('hide',t!==tab));
+  ['shots','cast','screen','approval','board','ep'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('hide',t!==tab));
 }));
 document.getElementById('ep').addEventListener('change',load);
 document.getElementById('save').addEventListener('click',save);
