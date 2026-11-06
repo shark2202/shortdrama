@@ -43,30 +43,48 @@ def load(p: Path):
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def speakable(text: str) -> bool:
-    """这条字幕该不该念出来。"""
-    t = (text or "").strip()
-    if not t or re.fullmatch(r"[\s。，、…\.\?!？！]*", t):
-        return False
-    if INFO_CARD.match(t):          # 纯时间戳/日期
-        return False
-    return True
-
-
 def collect_lines(job: Path) -> list[dict]:
+    """只念**真正的台词**（voice_cn），不念字幕。
+
+    为什么不能"有字幕就念"（第一版的做法，错得很贵）：
+    * 我们的剧本里大部分"台词"其实是**画面复述**（"没碰到。"、"压平了。"、"闭了一下。"）——
+      念出来就是把剧情解说一遍，短剧最忌讳这个；
+    * 音效（"咔嚓。"、"嗒。嗒。嗒。"、"雨声。"）念出来很怪；
+    * `subtitle_cn` 里有信息卡（"2025.1.15"、"凌晨 03:03"）和旁白——那是给**眼睛**的。
+
+    所以规则是：**只有 `voice_cn`（逐镜标注的"这句真有人说"）才配音**；
+    没有 voice_cn 的旧剧本回退到 dialogue_cn（兼容），再走一遍 speakable() 兜底。
+    """
     story = load(job / "story.json")
     out = []
     for sc in story.get("scenes", []):
         role = sc.get("ref") or sc.get("primary")
-        for field in ("dialogue_cn", "subtitle_cn"):
-            t = (sc.get(field) or "").strip()
-            if not speakable(t):
-                continue
-            if any(l["scene"] == sc["id"] and l["text"] == t for l in out):
-                continue        # 同一镜同一句只念一次
-            out.append({"scene": sc["id"], "idx": sc["idx"], "text": t,
-                        "role": role, "field": field})
+        field = "voice_cn" if "voice_cn" in sc else "dialogue_cn"
+        t = (sc.get(field) or "").strip()
+        if not speakable(t):
+            continue
+        out.append({"scene": sc["id"], "idx": sc["idx"], "text": t,
+                    "role": role, "field": field})
     return out
+
+
+def speakable(text: str) -> bool:
+    """这句该不该被念出来。
+
+    兜底规则（voice_cn 已标注时用不到，但旧剧本会走到这里）：
+    纯省略号/标点、纯时间戳日期 → 不念；音效拟声词 → 不念。
+    """
+    t = (text or "").strip()
+    if not t or re.fullmatch(r"[\s。，、…\.\?!？！]*", t):
+        return False
+    if INFO_CARD.match(t):
+        return False
+    if SFX_WORD.match(t):
+        return False
+    return True
+
+
+SFX_WORD = re.compile(r"^(咔嚓|咔|嗒|嗒。嗒。嗒。|滴|咚|沙沙|叮|响了|雨声|水声)[。！]?$")
 
 
 def synth(line: dict, out_wav: Path, cache: bool = True) -> Path | None:
