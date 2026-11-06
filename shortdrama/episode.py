@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -64,7 +65,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import build_ass  # noqa: E402
 
-from shortdrama import bgm, facecheck, grade, loudness  # noqa: E402
+from shortdrama import bgm, facecheck, grade, loudness, superres  # noqa: E402
 
 
 def comfy():
@@ -653,10 +654,25 @@ def stage_assemble(job: Path) -> None:
         # 竖屏：H3 把 360 圆整成 352（16 的倍数），3× = 1056×1920，不是平台规格。
         # 直接缩到目标交付尺寸（1080×1920），2.3% 的横向拉伸看不出来。
         dw, dh = delivery_size(aspect)
-        if aspect == "portrait":
+        # 真超分（Real-ESRGAN）优先：H3 只出 640×352，纯插值放大没有细节（用户反馈"清晰度不高"）。
+        # 找不到 ESRGAN 就退回 lanczos 重采样（后面再补一道轻锐化）。
+        if superres.enabled():
+            # 真超分：640×352 → 4×(ESRGAN) → 缩到交付尺寸 1920×1056 / 1080×1920
+            sr = job / "clips" / "upscaled_sr.mp4"
+            if sr.exists() and sr.stat().st_mtime >= concat.stat().st_mtime:
+                print("[assemble] 复用已有超分中间件 clips/upscaled_sr.mp4")
+            else:
+                print(f"[assemble] 真超分（Real-ESRGAN，后端 {superres.backend()}）")
+                superres.superres(job, concat, sr, scale=4)
+            run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error",
+                 "-i", str(sr), "-vf", f"scale={dw}:{dh}:flags=lanczos",
+                 "-c:v", "libx264", "-preset", "medium", "-crf", "17",
+                 "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-ar", "48000",
+                 "-b:a", "192k", str(up)])
+        elif aspect == "portrait":
             run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error",
                  "-i", str(concat), "-vf", f"scale={dw}:{dh}:flags=lanczos",
-                 "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                 "-c:v", "libx264", "-preset", "medium", "-crf", "17",
                  "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-ar", "48000",
                  "-b:a", "192k", str(up)])
         else:
@@ -691,6 +707,10 @@ def stage_assemble(job: Path) -> None:
         print("[assemble] 无 assets/bgm.oga，不加 BGM")
     # 系列级亮度统一：3 集平均亮度差 25%（E01=100/E02=80/E03=85），连续追剧会跳。
     vf_parts = ["ass=subtitles.ass"]
+    # 轻锐化：AI 帧本来就软，插值/超分之后再锐一道（SHORTDRAMA_SHARP=off 可关）
+    if os.environ.get("SHORTDRAMA_SHARP", "on").lower() not in ("off", "0", "false"):
+        vf_parts.append("hqdn3d=1.5:1.5:3:3:4:4:6")   # 轻降噪：压掉插值/压缩块感
+        vf_parts.append("unsharp=5:5:0.7:5:5:0.0")   # 锐化：AI 帧本来就软
     bright = grade.measure_brightness(up)
     corr = grade.brightness_filter(bright)
     if corr:
@@ -707,7 +727,7 @@ def stage_assemble(job: Path) -> None:
     else:
         cmd += ["-af", audio_chain, "-map", "0:v", "-map", "0:a"]
     cmd += ["-vf", ",".join(vf_parts),
-            "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p",
             "-r", str(FPS), "-c:a", "aac", "-ar", "48000", "-b:a", "192k",
             "-movflags", "+faststart", str(job / "episode.mp4")]
     run(cmd, cwd=job)

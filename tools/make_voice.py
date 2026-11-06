@@ -155,9 +155,17 @@ def mix(job: Path, track: Path) -> bool:
     cmd = [ffmpeg(), "-y", "-hide_banner", "-loglevel", "error",
            "-i", str(ep), "-i", str(track),
            "-filter_complex",
-           "[0:a]volume=0.45[bg];[1:a]volume=1.0[vo];"
+           # 混音链要跟后期链一致：**限 → 归一 → 限**。
+           # （第一版只有 loudnorm + 一道 limit=0.72 的限幅，实测两集成片样本峰顶到 0.0 dBFS 被阻断：
+           #   Kokoro 的人声轨本身有接近满刻度的样本，amix normalize=0 直接把它带进来。）
+           "[0:a]volume=0.45[bg];"
+           "[1:a]alimiter=limit=0.891:attack=0.1:level=disabled,volume=1.0[vo];"
            "[bg][vo]amix=inputs=2:normalize=0:duration=first,"
-           "loudnorm=I=-15:TP=-2.5:LRA=11,alimiter=limit=0.72:level=disabled[a]",
+           "loudnorm=I=-15:TP=-3.0:LRA=11,"
+           # 末限幅压到 -3.5 dBFS：实测 AAC 重编码会让几个瞬态样本越过 0 dBFS
+           #（E02 在 t=10.76s 有 5 个样本顶到满刻度，真峰却是 -2.3 → 阻断）。
+           # 留 2.5 dB 余量给编码器重建，才稳。
+           "alimiter=limit=0.67:attack=0.1:level=disabled[a]",
            "-map", "0:v", "-map", "[a]",
            "-c:v", "copy", "-c:a", "aac", "-ar", "48000", "-b:a", "192k",
            "-movflags", "+faststart", str(tmp)]
