@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>短剧 / 短视频生成平台 · 产品设计文档</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#fff; --ink:#1b1f24; --muted:#5b6470; --line:#e3e6ea;
+    --accent:#2f6fed; --accent-soft:#eaf1ff; --warn:#b26a00; --warn-bg:#fff6e5;
+    --ok:#0f7b45; --ok-bg:#e9f7ef; --bad:#c0392b; --bad-bg:#fdecea; --code-bg:#f2f4f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","Noto Sans CJK SC","Microsoft YaHei",sans-serif;}
+  .wrap{display:flex;max-width:1360px;margin:0 auto;gap:28px;padding:24px 20px 80px}
+  nav{position:sticky;top:16px;align-self:flex-start;width:250px;flex:0 0 250px;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    max-height:calc(100vh - 32px);overflow:auto}
+  nav b{display:block;font-size:13px;color:var(--muted);letter-spacing:.04em;margin-bottom:8px}
+  nav a{display:block;color:var(--ink);text-decoration:none;padding:4px 6px;border-radius:6px;font-size:13.5px}
+  nav a:hover{background:var(--accent-soft);color:var(--accent)}
+  nav a.sub{padding-left:16px;color:var(--muted);font-size:12.5px}
+  main{flex:1;min-width:0}
+  header.hero{background:linear-gradient(135deg,#22314d,#3a5580);color:#fff;border-radius:14px;padding:26px 28px;margin-bottom:22px}
+  header.hero h1{margin:0 0 8px;font-size:26px}
+  header.hero p{margin:4px 0 0;opacity:.9;font-size:14px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin-bottom:20px}
+  h2{margin:0 0 6px;font-size:20px;border-left:4px solid var(--accent);padding-left:10px}
+  h3{margin:22px 0 8px;font-size:16.5px;color:#243b64}
+  h4{margin:16px 0 6px;font-size:14.5px;color:var(--muted)}
+  .sub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px;background:#fff}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#f0f3f8;font-weight:600}
+  tbody tr:nth-child(even){background:#fafbfc}
+  code,kbd{background:var(--code-bg);border-radius:5px;padding:1px 5px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.6px}
+  pre{background:#111823;color:#e6edf3;border-radius:10px;padding:13px 15px;overflow:auto;font-size:12.8px;line-height:1.6}
+  pre code{background:none;color:inherit;padding:0}
+  .box{border-radius:10px;padding:12px 15px;margin:14px 0;font-size:14px;border:1px solid}
+  .box p:first-child{margin-top:0}.box p:last-child{margin-bottom:0}
+  .tip{background:var(--ok-bg);border-color:#bfe4cf}
+  .warn{background:var(--warn-bg);border-color:#f0d49b}
+  .bad{background:var(--bad-bg);border-color:#f2c1bb}
+  .info{background:var(--accent-soft);border-color:#c3d8ff}
+  .box b{font-weight:700}
+  .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0 14px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.3px}
+  .n{background:#fff;border:1.5px solid #9db4dd;border-radius:8px;padding:5px 9px;color:#1f3c73;white-space:nowrap}
+  .n.io{border-color:#8fc9a8;color:#14603a;background:#f2fbf6}
+  .n.out{border-color:#e0b878;color:#7a4a06;background:#fffaf1}
+  .n.human{border-color:#c9a0dc;color:#5b2a86;background:#faf3ff}
+  .ar{color:#8a94a3}
+  .tag{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:20px;background:var(--accent-soft);color:var(--accent);margin-right:5px}
+  .tag.ok{background:var(--ok-bg);color:var(--ok)}
+  .tag.no{background:var(--bad-bg);color:var(--bad)}
+  .tag.mid{background:var(--warn-bg);color:var(--warn)}
+  .tag.gray{background:#eceff3;color:var(--muted)}
+  ul,ol{padding-left:22px}
+  li{margin:4px 0}
+  .k{color:var(--muted);font-size:13px}
+  hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+  footer{color:var(--muted);font-size:12.5px;text-align:center;padding:10px}
+  .kpi{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0 4px}
+  .kpi div{flex:1 1 150px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .kpi b{display:block;font-size:20px;color:var(--accent);line-height:1.3}
+  .kpi span{font-size:12.5px;color:var(--muted)}
+  .grid2{display:flex;flex-wrap:wrap;gap:14px}
+  .grid2>div{flex:1 1 320px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.6px}
+  .persona{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .persona h4{margin:0 0 6px;font-size:15px;color:var(--ink)}
+  .persona .who{font-size:12.5px;color:var(--muted);margin-bottom:6px}
+  .step{display:flex;gap:10px;align-items:flex-start;margin:8px 0}
+  .step .n{flex:0 0 auto;min-width:32px;text-align:center}
+  .chip{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:6px;border:1px solid var(--line);background:#fff;margin:0 4px 4px 0}
+  @media (max-width:900px){nav{display:none}.wrap{padding:12px}}
+  @media print{nav{display:none}body{background:#fff}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <b>目录</b>
+  <a href="#tldr">0 · 一页速览</a>
+  <a href="#product">1 · 产品定义</a>
+  <a href="#form">2 · 产品形态</a>
+  <a href="#flow">3 · 端到端工作流</a>
+  <a href="#func">4 · 功能设计</a>
+  <a href="#ui">5 · 界面与交互规格</a>
+  <a href="#data">6 · 数据契约</a>
+  <a href="#nfr">7 · 非功能需求</a>
+  <a href="#quality">8 · 质量标准与验收</a>
+  <a href="#limits">9 · 已知限制与路线</a>
+  <a href="#glossary">10 · 术语表</a>
+  <a href="#appendix">11 · 附录</a>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>短剧 / 短视频生成平台 · 产品设计文档</h1>
+  <p>一句话题材 → 本地出成片（竖屏 1080×1920 为主交付，横屏 1920×1056 备用）</p>
+  <p>形态：<b>pi-agent（agent 内核）+ ComfyUI（渲染执行体）+ 自定义 Web 平台（看板/审片/放映/审批）</b>，全本机运行</p>
+  <p style="opacity:.8;font-size:13px">版本 v1 · 2026-11-08 · 依据 D202611_001 三集实跑（横屏 3 + 竖屏 3，105 镜）写成；
+    姊妹文档：<code>自动化短剧平台建设方案.html</code>（怎么建）、<code>SOP-短剧生产.md</code>（怎么干）</p>
+</header>
+
+<!-- ================= 0 ================= -->
+<section id="tldr">
+<h2>0 · 一页速览</h2>
+<p class="sub">如果只读一节，读这节。</p>
+
+<div class="kpi">
+  <div><b>2.0 h</b><span>一集 35 镜 / 3 分钟的 GPU 占用【实测】</span></div>
+  <div><b>1.5 min</b><span>一集后期（拼接+放大+字幕+BGM+响度）【实测】</span></div>
+  <div><b>5–10 min</b><span>一集人工审片（关键帧拼图 + 成片抽检）【实测】</span></div>
+  <div><b>13 张</b><span>任务看板阶段卡片（T0–T8）</span></div>
+  <div><b>0</b><span>数据库 / 多租户 / 账号体系</span></div>
+</div>
+
+<h3>0.1 产品一句话</h3>
+<div class="box info">
+<b>把「一句话题材 → 可投放的竖屏短剧成片」做成一条可复现、可审、可批的流水线。</b>
+创作侧只做三件事：<b>说题材</b>、<b>挑定妆图</b>、<b>拍板镜头与交付</b>；
+其余（写剧本、补台词、出图、出镜、拼接、烧字幕、配音、响度、自检、发布包）由 agent 与代码完成。
+</div>
+
+<h3>0.2 三个组件</h3>
+<table>
+<thead><tr><th>组件</th><th>是什么</th><th>承担</th><th>不该做</th></tr></thead>
+<tbody>
+<tr><td><b>pi-agent</b></td><td>agent 内核（本机 pi + 自有 skill）</td><td>写剧本、补台词、逐镜审片结论、触发阶段、给出审批的客观门禁</td><td>不碰 GPU、不碰凭据、不自造状态</td></tr>
+<tr><td><b>ComfyUI</b></td><td>渲染执行体（:8188）</td><td>Z-Image 出定妆图/关键帧，MiniMax-H3 W4A8 出镜</td><td>不做后期、不存业务状态</td></tr>
+<tr><td><b>Web 平台</b></td><td>自定义 Web（审片台 :8095）</td><td>任务看板 / 审片 / 放映 / 交付审批 / 上传包</td><td><b>不执行 GPU 与 ffmpeg 动作</b>，只做投影与触发</td></tr>
+</tbody>
+</table>
+
+<h3>0.3 三条产品原则</h3>
+<div class="box tip">
+<b>① 文件即状态。</b>job 目录是唯一真相源；看板、审批、上传包都是它的投影。
+不引数据库 = 不会有"看板和目录打架"这类 bug。<br>
+<b>② 浏览器是唯一操作面，agent 是唯一执行内核。</b>网页不实现 GPU 逻辑，纪律只有一份。<br>
+<b>③ 先便宜后昂贵。</b>10 秒能发现的错（lint、关键帧、证据表）绝不放到 210 秒后（重渲）。
+</div>
+
+<h3>0.4 文档定位</h3>
+<table>
+<thead><tr><th>文档</th><th>回答什么</th><th>读者</th></tr></thead>
+<tbody>
+<tr><td><b>本文（产品设计）</b></td><td>产品是什么、给谁用、流程长什么样、界面与契约怎么定义、验收标准</td><td>产品/设计/新同学</td></tr>
+<tr><td>自动化短剧平台建设方案.html</td><td>怎么建起来的：架构、决策、约束、里程碑、实测数据</td><td>工程</td></tr>
+<tr><td>SOP-短剧生产.md</td><td>每一步的命令、纪律、踩坑</td><td>执行者</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 1 ================= -->
+<section id="product">
+<h2>1 · 产品定义</h2>
+
+<h3>1.1 要解决的问题</h3>
+<table>
+<thead><tr><th>没有平台时</th><th>代价</th><th>平台怎么解</th></tr></thead>
+<tbody>
+<tr><td>写剧本、补台词、改一句话，都要手工改一堆文件</td><td>改一个错别字半小时，改一句台词要重跑整条链</td><td>阶段化 + 断点续跑：改文本只重跑 <code>shots→assemble→qc</code>（秒级 + 1.5 分钟），<b>不用重渲</b></td></tr>
+<tr><td>出图后才发现构图不对</td><td>一镜 210 秒的 GPU 白烧</td><td>关键帧先行（10 s/镜）→ 关键帧拼图一屏审片 → 确认后才烧 GPU</td></tr>
+<tr><td>审片要来回传文件</td><td>一轮审片半天，结论还丢</td><td>Web 审片台（局域网手机可看）+ 结论落文件 + 文字审核单降级</td></tr>
+<tr><td>"文件都在"≠"可以发"</td><td>空模板审片单、中途态质检报告混过去</td><td>交付审批层：批准那一刻重跑客观门禁，不过就批不出去</td></tr>
+<tr><td>不知道进度，等得心慌</td><td>反复问、反复重启</td><td>心跳日志 + 看板投影；状态从目录推断，不猜</td></tr>
+</tbody>
+</table>
+
+<h3>1.2 目标用户与场景</h3>
+<div class="grid2">
+  <div class="persona">
+    <h4>独立短剧创作者</h4>
+    <div class="who">1 人 · 有题材有想法 · 没有 GPU 集群 · 没有剪辑团队</div>
+    <b>场景</b>：给一句话题材，周末产出一集 3 分钟竖屏，投到抖音/红果看数据。
+    <b>痛点</b>：不懂管线、每个环节都要人守着；<b>产品价值</b>：一个网页 + 三个决策点，其余自动。
+  </div>
+  <div class="persona">
+    <h4>小团队工作室（2–5 人）</h4>
+    <div class="who">编剧 / 导演 / 发行分工 · 需要审片留痕</div>
+    <b>场景</b>：一部三集短剧，编剧定剧本、导演审镜、发行管发布包。
+    <b>痛点</b>：审片结论散在群里、谁批的说不清；<b>产品价值</b>：审批层留痕（谁、何时、依据、驳回理由），发布包一键交接。
+  </div>
+  <div class="persona">
+    <h4>内容运营 / 发行</h4>
+    <div class="who">要的是可投放的物料，不是工程</div>
+    <b>场景</b>：拿到成片 + 封面 + 标题简介标签 + 质检报告 → 传平台后台 → 看数据。
+    <b>痛点</b>：不知道能不能发；<b>产品价值</b>：上传包的 <code>CHECKS.md</code> 就是"能不能发"的客观答案。
+  </div>
+</div>
+
+<h3>1.3 价值主张（量化）</h3>
+<table>
+<thead><tr><th>指标</th><th>手工方式</th><th>平台</th><th>来源</th></tr></thead>
+<tbody>
+<tr><td>改一句台词的代价</td><td>重跑全链（小时级）</td><td><b>shots(秒) + assemble(1.5min)</b></td><td>实测</td></tr>
+<tr><td>发现一镜构图错的代价</td><td>渲完才发现 = 210 s</td><td>关键帧 = <b>10 s</b></td><td>实测</td></tr>
+<tr><td>一集 3 分钟的 GPU 成本</td><td>—</td><td><b>≈ 2.0 h</b>（35 镜 × 170–210 s）</td><td>实测</td></tr>
+<tr><td>审片一轮</td><td>传文件半天</td><td><b>5–10 min</b>（网页 + 关键帧拼图）</td><td>实测</td></tr>
+<tr><td>能不能发</td><td>凭感觉</td><td><b>门禁 5 项 + 审批签核</b></td><td>设计</td></tr>
+</tbody>
+</table>
+
+<h3>1.4 边界：明确不做什么</h3>
+<div class="box warn">
+<ul>
+<li><b>不做自动发布</b>（抖音/快手/红果）。账号、实名、版权声明、频控风控都不该进脚本 → 只出"上传包 + 文案 + 自检"，人工粘贴。</li>
+<li><b>不做多租户 / 账号体系 / 数据库</b>。单机单人产线；一个服务实例 = 一个剧集根目录。</li>
+<li><b>不做角色 LoRA 训练</b>。一致性靠定妆图 + ref2va（实测 r=0.998）。</li>
+<li><b>不做 TTS 训练</b>。用现成小模型本地合成（单音色/每角色一个音色），情绪表演靠字幕与镜头语言。</li>
+<li><b>不换视频底模</b>。本机只在 MiniMax-H3 W4A8 上验证过加速路线，换底模等于从头踩 sm_75 的量化坑。</li>
+<li><b>不追求真人写实</b>。H3 出的是漫剧/动画风；这是产品形态选择，不是待办项。</li>
+</ul>
+</div>
+</section>
+
+<!-- ================= 2 ================= -->
+<section id="form">
+<h2>2 · 产品形态</h2>
+
+<h3>2.1 系统构成</h3>
+<div class="flow">
+<span class="n human">人（浏览器 / 手机）</span><span class="ar">→</span>
+<span class="n">Web 平台：看板·审片·放映·审批</span><span class="ar">→</span>
+<span class="n">pi-agent 内核（无头）</span><span class="ar">→</span>
+<span class="n">阶段执行器（episode.py / tools）</span><span class="ar">→</span>
+<span class="n io">job 目录（唯一真相源）</span><span class="ar">→</span>
+<span class="n out">成片 + 交付件</span>
+</div>
+<table>
+<thead><tr><th>层</th><th>本机位置</th><th>端口 / 入口</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>Web 平台（审片台）</td><td class="mono">/home/a/ai-work/workspace/shortdrama</td><td class="mono">http://127.0.0.1:8095/</td><td>systemd user 常驻，崩溃自愈，开机自启</td></tr>
+<tr><td>渲染执行体</td><td class="mono">/home/a/ai-work/ComfyUI</td><td class="mono">http://127.0.0.1:8188/</td><td>常驻；渲染期间显存独占</td></tr>
+<tr><td>本地 LLM（剧本/台词/逻辑体检）</td><td class="mono">workspace/qwen3.8-2080ti-256k</td><td class="mono">http://127.0.0.1:8080/v1</td><td>按需启停；<b>与渲染互斥</b></td></tr>
+<tr><td>剧集工程（产物与结论）</td><td class="mono">/home/a/ai-work/duanju</td><td>—</td><td>独立 git 仓库</td></tr>
+<tr><td>平台总控（版本钉死 + 装配）</td><td class="mono">workspace/ai-work-platform</td><td class="mono">bootstrap.sh / ops/healthcheck.sh</td><td>GitHub: shark2202/ai-work-platform</td></tr>
+</tbody>
+</table>
+
+<h3>2.2 形态原则（为什么这么设计）</h3>
+<div class="grid2">
+  <div>
+    <h4>文件即状态</h4>
+    <p class="k">job 目录 = 剧本 + 分镜 + clips + 成片 + 审片结论 + 审批决议 + 报告。
+    状态从文件推断（"clips 数量 = shots 数量 = 已出镜"），不维护第二份状态表。</p>
+  </div>
+  <div>
+    <h4>网页不执行 GPU</h4>
+    <p class="k">网页只做两件事：读文件（投影）、点按钮（起子进程）。
+    档位、显存门控、关键帧先行这些纪律只写在代码里一份。</p>
+  </div>
+  <div>
+    <h4>两种执行者</h4>
+    <p class="k"><code>cli</code>：本地命令跑确定性阶段（出图/出镜/拼接/质检）。
+    <code>agent</code>：起 pi 无头 session，把阶段任务卡当提示词交给 agent（内容决策类）。</p>
+  </div>
+  <div>
+    <h4>降级路径同权</h4>
+    <p class="k">没有浏览器 → TUI + 文字审核单 + 证据表；没有网络 → 终端看板；
+    没有 GPU → 只出文案与剧本。</p>
+  </div>
+</div>
+
+<h3>2.3 访问入口一览</h3>
+<table>
+<thead><tr><th>我想…</th><th>用哪个入口</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>审片 / 挑图 / 审批 / 看板</td><td class="mono">./sd studio &lt;剧集根&gt;</td><td>浏览器；局域网 <code>--host 0.0.0.0</code> + 令牌</td></tr>
+<tr><td>看片（放映页，海报墙 + 连续播放）</td><td class="mono">同上 → 「放映」页签</td><td>只读不需要令牌</td></tr>
+<tr><td>命令行看阶段状态 / 触发阶段</td><td class="mono">./sd board &lt;剧集根&gt; [--run &lt;stage&gt;]</td><td>agent 在 TUI 里也用它</td></tr>
+<tr><td>交付审批</td><td class="mono">./sd approval &lt;集&gt; --submit/--approve/--reject</td><td>批准时客观门禁重跑</td></tr>
+<tr><td>只给外部人看文件</td><td class="mono">./sd assets serve &lt;任意目录&gt;</td><td>纯只读静态页，无令牌</td></tr>
+<tr><td>体检</td><td class="mono">bash ops/healthcheck.sh</td><td>三件套 + GPU</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 3 ================= -->
+<section id="flow">
+<h2>3 · 端到端工作流</h2>
+
+<h3>3.1 全景</h3>
+<div class="flow">
+<span class="n human">建任务</span><span class="ar">→</span>
+<span class="n">剧本</span><span class="ar">→</span>
+<span class="n">台词/字幕</span><span class="ar">→</span>
+<span class="n">人物/场景图</span><span class="ar">→</span>
+<span class="n human">挑图</span><span class="ar">→</span>
+<span class="n">分镜+关键帧</span><span class="ar">→</span>
+<span class="n human">审关键帧</span><span class="ar">→</span>
+<span class="n">分段镜头</span><span class="ar">→</span>
+<span class="n human">审成片</span><span class="ar">→</span>
+<span class="n">整集（后期）</span><span class="ar">→</span>
+<span class="n">质检</span><span class="ar">→</span>
+<span class="n human">交付审批</span><span class="ar">→</span>
+<span class="n out">上传包</span>
+</div>
+<p class="k">紫色 = 人的决策点（3 个）；其余 = agent 与代码。</p>
+
+<h3>3.2 阶段规格（13 张看板卡片）</h3>
+<table>
+<thead><tr><th>卡片</th><th>谁做</th><th>输入</th><th>产出</th><th>验收</th><th>失败处置</th></tr></thead>
+<tbody>
+<tr><td>T0 写剧本</td><td>agent</td><td>题材 + 分集大纲</td><td><code>story.json</code>（中英双轨 + 每镜 <code>ref</code>）</td><td><code>lint</code> 无 block</td><td>带错误重试 ≤2 次；仍失败人工改 JSON</td></tr>
+<tr><td>T1 剧本预检</td><td>code</td><td><code>story.json</code></td><td>预检报告</td><td>prompt_en 非空且无中文 / idx 连续 / 角色引用存在</td><td>秒级挡下毁集级错误</td></tr>
+<tr><td>T2 台词/字幕</td><td>agent</td><td><code>story.json</code></td><td>每镜 <code>dialogue_cn</code> / <code>subtitle_cn</code> / <code>voice_cn</code></td><td>有效字幕覆盖 ≥ 40%</td><td><b>只改文本 → 不用重渲</b></td></tr>
+<tr><td>T3 定妆候选图</td><td>code(GPU)</td><td>角色身份锚点</td><td><code>cast/&lt;id&gt;_cand*.png</code></td><td>脸型/性别/年龄与设定一致</td><td>重出候选</td></tr>
+<tr><td>T3 挑图落地</td><td><b>人</b></td><td>候选图</td><td><code>cast/&lt;id&gt;.png</code> + <code>_alt.png</code></td><td>每角色有主图与备图</td><td>重出候选</td></tr>
+<tr><td>T4 分镜</td><td>code</td><td><code>story.json</code></td><td><code>shots.json</code>（H3 固定句式 + 字幕）</td><td>每镜带 <code>ref</code> 与 <code>natural ambient audio</code></td><td>秒级，可重跑</td></tr>
+<tr><td>T4 关键帧</td><td>code(GPU)</td><td><code>prompt_cn</code></td><td><code>frames/NN.png</code> + 拼图</td><td>关键帧齐 + 一屏可审</td><td><b>10 s/张重出</b></td></tr>
+<tr><td>T5 分段镜头</td><td>code(GPU)</td><td><code>shots.json</code> + <code>cast/</code></td><td><code>clips/NN.mp4</code></td><td>5.17 s / 640×352 / 有音轨 / 非黑帧</td><td>单镜重试 ≤3 且换 seed；标 redo</td></tr>
+<tr><td>T5 审片</td><td><b>人</b>（agent 代看）</td><td>成片抽帧</td><td><code>review.md</code>（35 镜结论）+ <code>review.json</code></td><td>通过 / 重出 / 改词 全部有结论</td><td>「重出」= 删 clip，下次只重出该镜</td></tr>
+<tr><td>T5 证据表</td><td>code</td><td><code>clips/</code> + <code>frames/</code></td><td><code>qc/evidence.md</code></td><td>给出"先看这 N 镜"排序</td><td>无图环境的评审入口</td></tr>
+<tr><td>T6 整集</td><td>code(CPU)</td><td><code>clips/</code></td><td><code>episode.mp4</code> + <code>subtitles.srt/.ass</code></td><td>规格 + 响度 + 字幕可见</td><td>只重出问题镜</td></tr>
+<tr><td>T7 质检</td><td>code</td><td>成片 + 源镜</td><td><code>report.json</code></td><td>阻断 = 0</td><td>按 <code>where</code> 指回具体镜</td></tr>
+<tr><td>T8 交付审批</td><td><b>人</b></td><td>报告 + 审片单 + 证据表 + 交付件</td><td><code>approval.json</code> + <code>logs/approval.log</code></td><td>批准时客观门禁全过</td><td>驳回（必须写理由/镜号）→ changes_requested</td></tr>
+</tbody>
+</table>
+
+<h3>3.3 人在环的三个决策点</h3>
+<div class="step"><span class="n human">1</span><div><b>挑定妆图</b> —— 角色锚点是全剧一致性的天花板。主图 = 脸最正、五官无遮挡；备图 = 同一张脸、角度略不同（给 ref2va 一点变化余地）。</div></div>
+<div class="step"><span class="n human">2</span><div><b>逐镜审片</b> —— 每镜一个结论：通过 / 重出 / 改词。<b>判据必须是成片抽帧</b>，关键帧不能代表成片（实测：按关键帧误判 29 镜，真缺陷只有 7 镜）。</div></div>
+<div class="step"><span class="n human">3</span><div><b>交付审批</b> —— 这一集批不批。批准时客观门禁重跑；驳回必须写理由；批准后成片再被改动 → 批准自动失效。</div></div>
+
+<h3>3.4 一集的时间线（实测）</h3>
+<table>
+<thead><tr><th>阶段</th><th>耗时</th><th>期间人在干什么</th></tr></thead>
+<tbody>
+<tr><td>剧本 + 台词</td><td>5–10 min（LLM，CPU/GPU 间歇）</td><td>等；可同时写下一集</td></tr>
+<tr><td>定妆图（全剧一次）</td><td>70 s</td><td>挑图</td></tr>
+<tr><td>关键帧</td><td>≈ 6 min（35 镜 × 10 s）</td><td>审关键帧拼图，标记要改的镜</td></tr>
+<tr><td>出镜</td><td><b>≈ 2.0 h</b>（35 镜 × 170–210 s）</td><td>不用守着（心跳+看板看着）</td></tr>
+<tr><td>审成片</td><td>5–10 min</td><td>逐镜判定</td></tr>
+<tr><td>后期 + 质检</td><td>≈ 2.5 min</td><td>等</td></tr>
+<tr><td>审批 + 出包</td><td>≈ 2 min</td><td>签核</td></tr>
+</tbody>
+</table>
+<p class="k">墙钟合计 ≈ 2.5 h/集（GPU 约 95%）。竖屏版需再渲一遍（同规格）。</p>
+</section>
+
+<!-- ================= 4 ================= -->
+<section id="func">
+<h2>4 · 功能设计</h2>
+
+<h3>4.1 任务看板</h3>
+<p>一集 = 13 张卡片。卡片<b>状态 = 产物在不在</b>，不由流水线自报。</p>
+<table>
+<thead><tr><th>卡片</th><th>状态判据</th><th>显示</th></tr></thead>
+<tbody>
+<tr><td>T1 剧本预检</td><td><code>story.json</code> 存在</td><td>已就位 / 还没有剧本</td></tr>
+<tr><td>T0 写剧本</td><td>同上（<b>manual</b>：看板不代跑，需要题材参数）</td><td>需要题材一句话</td></tr>
+<tr><td>T2 台词/字幕</td><td>有字幕的镜 ≥ 40%</td><td>字幕 30/35</td></tr>
+<tr><td>T3 定妆候选图</td><td><code>cast/*_cand*.png</code> 存在</td><td>候选 9 张</td></tr>
+<tr><td>T3 挑图落地</td><td>每角色有 <code>cast/&lt;id&gt;.png</code></td><td>已选 2/2</td></tr>
+<tr><td>T4 分镜</td><td><code>shots.json</code> 存在</td><td>35 镜</td></tr>
+<tr><td>T4 关键帧</td><td><code>frames/</code> 数量 ≥ 镜数</td><td>关键帧 35/35</td></tr>
+<tr><td>T5 分段镜头</td><td><code>clips/</code> 数量 ≥ 镜数</td><td>镜头 35/35</td></tr>
+<tr><td>T5 审片</td><td><code>review.json</code> 全部有结论且无 redo</td><td>已审 35/35 · 待重出 0</td></tr>
+<tr><td>T5 证据表</td><td><code>qc/evidence.md</code> 存在</td><td>已生成 / 还没跑</td></tr>
+<tr><td>T6 整集</td><td><code>episode.mp4</code> 存在</td><td>132 MB</td></tr>
+<tr><td>T7 质检</td><td><code>report.json</code> 存在且阻断 0</td><td>阻断 0 · 字幕 32/35</td></tr>
+<tr><td>T8 交付审批</td><td><code>approval.json</code> 状态</td><td>已批准 / 已提交待批 / 已驳回待改 / 待提交</td></tr>
+</tbody>
+</table>
+<div class="box info">
+<b>触发语义。</b>点「运行」→ 后端起子进程 → 写 <code>logs/stage-&lt;key&gt;.pid</code> 与
+<code>logs/stage-&lt;key&gt;.log</code> → 看板读这两个文件显示"运行中"与心跳尾。
+同一阶段重复触发会被拒（pid 还活着）。「停止」杀整个进程组（渲染会起子进程）。
+</div>
+
+<h3>4.2 审片台（六个页签）</h3>
+<table>
+<thead><tr><th>页签</th><th>目的</th><th>关键元素</th><th>写操作</th></tr></thead>
+<tbody>
+<tr><td><b>分镜审片</b></td><td>逐镜判定</td><td>每镜：视频/关键帧、字幕、角色、通过/重出、备注</td><td><code>review.json</code>；「重出」= 删该镜 clip</td></tr>
+<tr><td><b>定妆选图</b></td><td>挑主图/备图</td><td>候选缩略图（已选高亮）</td><td><code>cast/selection.json</code></td></tr>
+<tr><td><b>放映</b></td><td>整剧连看</td><td>海报墙（封面+集名+时长+质检状态）、页内播放、连续播放</td><td>无（只读）</td></tr>
+<tr><td><b>交付审批</b></td><td>这一集批不批</td><td>状态徽标、决议人、理由、提交/批准/驳回、决议历史</td><td><code>approval.json</code> + <code>logs/approval.log</code></td></tr>
+<tr><td><b>任务看板</b></td><td>看进度 / 触发</td><td>13 张卡片、运行/停止、执行者下拉（cli / agent）</td><td>起进程</td></tr>
+<tr><td><b>成片与质检</b></td><td>看结果</td><td>播放器、findings 表、agent 日志尾</td><td>无</td></tr>
+</tbody>
+</table>
+<p class="k">权限：读操作局域网开放（自己的片子自己看）；写操作必须带令牌（URL <code>?k=…</code> 或
+<code>X-Studio-Token</code> 头）——因为「重出」会删 clip、「驳回」会改决议。</p>
+
+<h3>4.3 交付审批层</h3>
+<div class="flow">
+<span class="n">pending</span><span class="ar">─submit→</span><span class="n">submitted</span><span class="ar">─approve→</span><span class="n out">approved</span>
+<span class="ar">　│</span><span class="n">changes_requested</span><span class="ar">─submit→</span><span class="n">submitted</span>
+</div>
+<div class="box tip">
+<b>三条硬规则</b>
+<ol>
+<li><b>批准时重跑客观门禁</b>（不信提交时的快照）：质检阻断 / 逐镜审片（未通过 + 未填）/ 证据表 / 交付件齐全 / 字幕覆盖 —— 任一不过，<b>批准被拒</b>并写明是哪一项。</li>
+<li><b>驳回必须给理由或镜号</b>，否则拒绝执行。</li>
+<li><b>批准会自己失效</b>：批准后成片或 clip 被改动 → 状态自动回落 <code>pending</code>（<code>logs/approval.log</code> 留 <code>auto-reset</code> 一行）。</li>
+</ol>
+</div>
+
+<h3>4.4 证据表（无图环境的取证层）</h3>
+<p>给「只能 SSH、只有 TUI、看不到图和视频」的场景。每镜 4 个客观事实 + 旗标 + 排序：</p>
+<table>
+<thead><tr><th>事实</th><th>怎么测</th><th>能暴露什么</th></tr></thead>
+<tbody>
+<tr><td>亮度 / 饱和</td><td>signalstats</td><td>过暗、过曝、<b>与上一镜亮度跳变</b>（观众立刻感觉到）</td></tr>
+<tr><td>静止秒数</td><td>freezedetect</td><td>卡住 / 废镜</td></tr>
+<tr><td>关键帧 vs 成片 PSNR</td><td>psnr filter</td><td><b>哪条证据路径不可信</b>（PSNR 低 = 关键帧不能代表成片）</td></tr>
+<tr><td>与上一镜相似度</td><td>8×8 彩色签名</td><td>重复镜</td></tr>
+</tbody>
+</table>
+<p class="k">产出 <code>qc/evidence.md</code>：一张表 + 「先看这 N 镜（按优先级）」。评审从"全片扫"变成"看 5–10 镜 + 抽 3 镜"。</p>
+
+<h3>4.5 上传包（发布交接）</h3>
+<p>不自动发布（账号/实名/风控不进脚本），而是把材料备齐并自检，人在平台后台粘贴。</p>
+<table>
+<thead><tr><th>包内文件</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td><code>episode.mp4</code></td><td>竖屏主交付（硬链接，不占额外空间）</td></tr>
+<tr><td><code>cover_*.jpg</code></td><td>封面</td></tr>
+<tr><td><code>release_meta.json</code></td><td>标题/简介/标签/时长/分辨率（<b>从成片实测</b>，不手填）</td></tr>
+<tr><td><code>subtitles.srt</code></td><td>平台自带字幕轨用（画面里已烧一份）</td></tr>
+<tr><td><code>文案.txt</code></td><td>可直接粘贴的标题 / 简介 / 话题标签</td></tr>
+<tr><td><code>CHECKS.md</code></td><td><b>上传前最后一道客观闸门</b>：阻断项、字幕覆盖、响度/峰值/LRA、人工审片未通过与未填数、文件 sha256、上传步骤</td></tr>
+</tbody>
+</table>
+<div class="box warn">
+<code>CHECKS.md</code> 会当场抓出两类"文件齐全但不能发"的假交付：
+① <b>审片单是空模板</b>（结论列是未勾选的复选框 = 没人判过）；
+② <b>质检报告是中途态</b>（如"缺镜头"阻断）。这两类只有自检表看得出来。
+</div>
+
+<h3>4.6 CLI / TUI 等价物</h3>
+<table>
+<thead><tr><th>命令</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td class="mono">./sd studio &lt;剧集根&gt;</td><td>起审片台（可选 <code>--host 0.0.0.0</code> / <code>--token</code> / <code>--port</code>）</td></tr>
+<tr><td class="mono">./sd board &lt;剧集根&gt; [--run &lt;stage&gt;] [--stop &lt;stage&gt;]</td><td>终端看板；<code>--run</code> 直接触发阶段</td></tr>
+<tr><td class="mono">./sd approval &lt;集&gt; --submit/--approve/--reject</td><td>交付审批（带 <code>--by</code> <code>--note</code> <code>--items</code>）</td></tr>
+<tr><td class="mono">./sd assets ls|json|html|serve &lt;目录&gt;</td><td>只读资产清单 / 静态页</td></tr>
+<tr><td class="mono">python3 shortdrama/episode.py &lt;集&gt; &lt;阶段…&gt;</td><td>阶段驱动（lint/cast/pick/shots/frames/render/review/assemble/qc）</td></tr>
+<tr><td class="mono">python3 shortdrama/evidence.py &lt;集&gt;</td><td>证据表</td></tr>
+<tr><td class="mono">python3 shortdrama/approval.py &lt;集&gt;</td><td>审批单（CLI 版）</td></tr>
+<tr><td class="mono">python3 tools/add_dialogue.py --root &lt;根&gt; --episode E01</td><td>补台词（代码选镜 + LLM 写字）</td></tr>
+<tr><td class="mono">python3 tools/make_upload_pack.py --root &lt;根&gt;</td><td>生成上传包 + CHECKS.md</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 5 ================= -->
+<section id="ui">
+<h2>5 · 界面与交互规格</h2>
+
+<h3>5.1 信息架构</h3>
+<pre><code>审片台 (:8095)
+├── 顶部：剧集/根目录 · 当前阶段 · 画幅 · 镜头进度 · 刷新 · 保存决定 · 自动刷新
+├── 集选择器（下拉）
+├── 页签
+│   ├── 分镜审片     逐镜判定（视频/关键帧 + 通过/重出 + 备注）
+│   ├── 定妆选图     候选 → 主图/备图
+│   ├── 放映         海报墙 + 页内播放 + 连续播放（只读）
+│   ├── 交付审批     状态 + 决议人/理由 + 提交/批准/驳回 + 决议历史
+│   ├── 任务看板     13 张阶段卡片 + 运行/停止 + 执行者选择
+│   └── 成片与质检   播放器 + findings 表 + agent 日志尾
+└── 手机端：单列 + 大触控区 + 视频优先；只读操作不需要令牌</code></pre>
+
+<h3>5.2 状态词典（全平台统一）</h3>
+<table>
+<thead><tr><th>状态</th><th>出现位置</th><th>含义</th><th>颜色</th></tr></thead>
+<tbody>
+<tr><td>完成 / 已就位</td><td>卡片、阶段徽标</td><td>产物已存在且符合判据</td><td>绿</td></tr>
+<tr><td>运行中</td><td>卡片</td><td>pid 活着，显示心跳尾</td><td>黄</td></tr>
+<tr><td>待做 / 未提交</td><td>卡片、审批</td><td>产物缺失或没到阈值</td><td>灰/蓝</td></tr>
+<tr><td>已提交待批</td><td>审批</td><td>等人工签核</td><td>黄</td></tr>
+<tr><td>已批准</td><td>审批</td><td>客观门禁全过且已签核</td><td>绿</td></tr>
+<tr><td>已驳回待改</td><td>审批</td><td>有决议与理由，改完再提交</td><td>红</td></tr>
+<tr><td>阻断 / 需先给参数</td><td>质检、卡片</td><td>阻断项非空；或该阶段需要人工参数（题材）</td><td>红 / 灰</td></tr>
+</tbody>
+</table>
+
+<h3>5.3 交互细则</h3>
+<ul>
+<li><b>「重出」是破坏性动作</b>：会删掉该镜 clip。因此必须带令牌，且在 UI 上与「通过」区分颜色。</li>
+<li><b>自动刷新</b>：默认 5 秒一轮（可关）。刷新只更新投影，不打断正在播放的视频。</li>
+<li><b>错误提示要说人话</b>：例如"客观门禁未过，不能批准：人工逐镜审片（35 镜：未通过 0，未填 35）"，而不是 HTTP 403。</li>
+<li><b>长任务的反馈</b>：阶段卡下方显示该阶段日志的最后 2 行（心跳），让人知道"在动"而不是"卡住"。</li>
+<li><b>不可逆动作留痕</b>：审批决议写 <code>approval.json</code> + 追加 <code>logs/approval.log</code>（只增不改）。</li>
+</ul>
+
+<h3>5.4 降级矩阵</h3>
+<table>
+<thead><tr><th>缺什么</th><th>降级到</th><th>代价</th></tr></thead>
+<tbody>
+<tr><td>浏览器</td><td>TUI：<code>sd board</code> 看状态、<code>qc/review.md</code> 文字审核单、<code>qc/evidence.md</code> 证据表</td><td>人看不到图 → 只能复核 agent 的结论</td></tr>
+<tr><td>局域网/手机</td><td>SSH 隧道：<code>ssh -L 8095:127.0.0.1:8095</code></td><td>同上</td></tr>
+<tr><td>GPU（LLM 占着）</td><td>只做 CPU 阶段（剧本/台词/质检/审批）；渲染与超分等显存</td><td>出片暂停</td></tr>
+<tr><td>本地 LLM</td><td>人工填 story.json；台词用现成文案</td><td>内容质量下降</td></tr>
+<tr><td>网络</td><td>全本地运行（模型权重在本机）；只有发布需要外网</td><td>—</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 6 ================= -->
+<section id="data">
+<h2>6 · 数据契约</h2>
+
+<h3>6.1 契约总表</h3>
+<table>
+<thead><tr><th>文件</th><th>谁写</th><th>谁读</th><th>生命周期</th></tr></thead>
+<tbody>
+<tr><td><code>story.json</code></td><td>agent（剧本+台词）· 人可改</td><td>lint / shots / 配音 / 审片</td><td>长期（不可再生）</td></tr>
+<tr><td><code>shots.json</code></td><td>代码（由 story 派生）</td><td>出镜 / 后期 / 质检</td><td>可再生成</td></tr>
+<tr><td><code>cast/</code></td><td>出图 + 人挑</td><td>出镜 / 一致性</td><td>长期（角色锚点）</td></tr>
+<tr><td><code>frames/</code></td><td>代码</td><td>审片（粗检）</td><td>可再生（10 s/张）</td></tr>
+<tr><td><code>clips/</code></td><td>代码</td><td>后期 / 质检</td><td>可再生（210 s/镜）</td></tr>
+<tr><td><code>episode.mp4</code></td><td>后期</td><td>平台发布 / 审片</td><td>交付物</td></tr>
+<tr><td><code>qc/review.md</code> · <code>review.json</code></td><td>人（agent 代看）</td><td>渲染（redo）/ 审批</td><td>长期（人工结论）</td></tr>
+<tr><td><code>qc/evidence.md</code> · <code>evidence.json</code></td><td>代码</td><td>人（无图评审）</td><td>可再生</td></tr>
+<tr><td><code>approval.json</code> · <code>logs/approval.log</code></td><td>人（审批层）</td><td>看板 / 上传包 / 审计</td><td>长期（签核留痕）</td></tr>
+<tr><td><code>report.json</code></td><td>质检</td><td>审批 / 门禁</td><td>随成片更新</td></tr>
+<tr><td><code>release_meta.json</code> · <code>RELEASE.md</code></td><td>发布工具</td><td>平台后台粘贴</td><td>交付物</td></tr>
+</tbody>
+</table>
+
+<h3>6.2 关键字段</h3>
+<pre><code>story.json
+  aspect: "landscape" | "portrait"     ← 决定出片画幅（竖屏是原生生成，不是裁切）
+  characters[]: id, name, desc_cn, traits_en(英文特征词 → 进每镜提示词，防 ref2va 漂人)
+  scenes[]: idx, chars[], ref(角色 id 或 null=物镜), beat, duration_s(5.17),
+            prompt_cn(关键帧用), prompt_en(喂 H3), sfx/sfx_en,
+            dialogue_cn(台词), subtitle_cn(上屏), voice_cn(要念的；空=不念)
+
+shots.json
+  shots[]: idx, ref, prompt_en(固定句式拼好), subtitle_cn, dialogue_cn, sfx_en, duration_s
+
+approval.json
+  state: pending | submitted | changes_requested | approved
+  rounds[]: {state, by, at, note, items[镜号], checks{门禁项:实测值}}</code></pre>
+
+<h3>6.3 命名与目录约定</h3>
+<pre><code>duanju/
+├── D202611_001_E01/          一集一个目录（横屏 1920×1056）
+│   ├── story.json shots.json cast→ frames/ clips/ episode.mp4
+│   ├── subtitles.srt subtitles.ass release_meta.json approval.json
+│   ├── report.json qc/(review.md, evidence.md, approval.md) logs/
+├── D202611_001_E01_P/        同一集的竖屏版（平行目录，零代码改动）
+├── cast/                     全剧共用定妆图（跨集不换脸）
+├── assets/bgm.oga            BGM 情绪床 + CREDITS
+└── RELEASE.md DELIVERY.md    发布清单 / 交付说明</code></pre>
+</section>
+
+<!-- ================= 7 ================= -->
+<section id="nfr">
+<h2>7 · 非功能需求</h2>
+
+<h3>7.1 性能（实测）</h3>
+<table>
+<thead><tr><th>指标</th><th>目标</th><th>实测</th></tr></thead>
+<tbody>
+<tr><td>单镜出镜</td><td>&lt; 260 s</td><td>170–210 s（ref2va 为主）</td></tr>
+<tr><td>一集出镜（35 镜）</td><td>≈ 2 h</td><td>≈ 1 h 55 min</td></tr>
+<tr><td>一集后期</td><td>&lt; 5 min</td><td>≈ 1.5 min</td></tr>
+<tr><td>一集质检</td><td>&lt; 2 min</td><td>≈ 1 min</td></tr>
+<tr><td>证据表</td><td>&lt; 1 min</td><td>≈ 4 s（35 镜）</td></tr>
+<tr><td>改一句台词</td><td>&lt; 5 min</td><td>shots 秒级 + assemble 1.5 min</td></tr>
+<tr><td>审片台响应</td><td>&lt; 1 s</td><td>只读投影；视频走 HTTP Range</td></tr>
+</tbody>
+</table>
+
+<h3>7.2 可靠性</h3>
+<ul>
+<li><b>幂等</b>：所有阶段可重复执行；中间件按 mtime 判断是否需要重做（改字幕不必重拼重放大）。</li>
+<li><b>断点续跑</b>：渲染粒度 = 单镜；崩在第 34 镜不重跑前 33 镜。</li>
+<li><b>失败不破坏既有产物</b>：装配失败保留旧成片；渲染失败只标 redo，不删其它镜。</li>
+<li><b>状态自愈</b>：成片/clip 在批准后被改动 → 批准自动回落 pending。</li>
+<li><b>服务自愈</b>：审片台 systemd <code>Restart=always</code>，崩溃 5 秒后拉起（实测）。</li>
+</ul>
+
+<h3>7.3 可复现</h3>
+<ul>
+<li>每镜 seed 固定并记录在 <code>clips/manifest.json</code>；成片只用可复现档（缓存档只用于草稿）。</li>
+<li>组件版本钉在 <code>platform.lock.json</code>，由 <code>ops/relock.sh</code> 刷新（禁止手抄）。</li>
+<li>平台总控、web 平台、剧集产物三个仓库各自独立 git 历史，互不牵制。</li>
+</ul>
+
+<h3>7.4 资源纪律</h3>
+<div class="box warn">
+<b>单卡 22GB 是唯一硬瓶颈。</b>本地 LLM 常驻 13–19GB，H3 渲染/超分需 ≈20GB → <b>两者不能共存</b>。
+所有 GPU 动作前必须确认显存 &lt; 4000 MiB（<code>superres.py</code> 自带 <code>wait_gpu</code> 门控）。
+渲染期间温度实测可达 86°C（阈值 85°C）→ 长时间连渲后要停机降温。
+</div>
+
+<h3>7.5 安全</h3>
+<table>
+<thead><tr><th>面</th><th>策略</th></tr></thead>
+<tbody>
+<tr><td>写操作（删 clip、改决议、起进程）</td><td>必须带令牌；令牌固定存 <code>~/.config/shortdrama/studio.token</code>（600），不入库</td></tr>
+<tr><td>读操作（看片）</td><td>局域网开放；对外分享用静态资产页（只读、无令牌）</td></tr>
+<tr><td>绑定地址</td><td>默认 127.0.0.1；开放局域网需显式 <code>--host 0.0.0.0</code></td></tr>
+<tr><td>凭据</td><td><code>auth.json</code> / <code>gh/hosts.yml</code> / token 一律不入库（.gitignore 已钉）</td></tr>
+<tr><td>渲染体</td><td>ComfyUI 无鉴权（C7 风险）→ 生产建议绑 127.0.0.1 或 tailscale</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 8 ================= -->
+<section id="quality">
+<h2>8 · 质量标准与验收</h2>
+
+<h3>8.1 交付门禁（五类，一条命令）</h3>
+<ol>
+<li><b>数据四方一致性</b>：剧本 / 分镜 / clips / manifest 对得上</li>
+<li><b>提示词纪律</b>（机器可查的部分）</li>
+<li><b>质检门禁</b>：分辨率 / 帧率 / 黑帧 / 静音 / 削波 / 缺镜 / 字幕重复 / 字幕可见性 / 响度</li>
+<li><b>审片单结论</b>：人工写的"重出 / 修词"必须为 0，且不能是空模板</li>
+<li><b>交付件齐全性</b>：成片 / 封面 / 元数据 / 审片单 / 报告 / 字幕 / 清单 / 关键帧 / 人声</li>
+</ol>
+
+<h3>8.2 数值目标</h3>
+<table>
+<thead><tr><th>指标</th><th>目标</th><th>实测（3 集）</th></tr></thead>
+<tbody>
+<tr><td>整体响度 I</td><td>-16 ± 1 LUFS</td><td>-16.0 ~ -16.1</td></tr>
+<tr><td>样本峰值 / 真峰</td><td>≤ -1.0 dBFS</td><td>-1.3 ~ -1.7 / -1.2 ~ -1.8</td></tr>
+<tr><td>动态范围 LRA</td><td>≤ 12 LU</td><td>6.1 ~ 8.0</td></tr>
+<tr><td>平均亮度 YAVG</td><td>系列级统一到 90</td><td>88.5 ~ 90</td></tr>
+<tr><td>有效字幕覆盖</td><td>≥ 40%（qc 口径）</td><td>20/35 ~ 29/35（补台词后）</td></tr>
+<tr><td>清晰度</td><td>同帧拉普拉斯方差</td><td>插值 32.0 → 降噪+锐化 <b>46.4（1.45×）</b></td></tr>
+<tr><td>成片时长</td><td>180.93 ± 0.5 s</td><td>182.02 s（concat 累积误差 1.07 s，warn）</td></tr>
+<tr><td>配音</td><td>只念真台词</td><td>35 镜里念 11–12 句（其余是字幕）</td></tr>
+</tbody>
+</table>
+
+<h3>8.3 品味层（自动化查不了的部分）</h3>
+<div class="box info">
+客观门禁保证"不难看、不断片、规格对"，<b>保证不了"好看"</b>。节奏感、情绪、演员感必须由真人判断：
+① 拉同题材爆款做分镜拆解表，逐行比；② 找真人剪辑/导演看成片，只问三句"哪镜出戏、哪句假、结尾想点下一集吗"；
+③ 5–10 个目标受众盲测，<b>二选一而不是打分</b>（人对打分客气，对二选一不会）。
+</div>
+</section>
+
+<!-- ================= 9 ================= -->
+<section id="limits">
+<h2>9 · 已知限制与路线</h2>
+
+<h3>9.1 当前限制（如实记录）</h3>
+<table>
+<thead><tr><th>限制</th><th>事实</th><th>影响</th><th>最便宜的改法</th></tr></thead>
+<tbody>
+<tr><td>清晰度的天花板</td><td>H3 原生只出 640×352，交付是 3× 插值；真超分（ESRGAN 4×）实测 1.9 s/帧 → 2.2 h/集，且与 LLM 抢显存会 OOM</td><td>画面仍偏软（锐化后 1.45×）</td><td>① 停 LLM 换窗口跑超分；② 提高原生渲染分辨率重渲（~23 h GPU）</td></tr>
+<tr><td>配音是外挂 TTS</td><td>单音色/每角色一音色，非真人；情绪靠字幕与镜头语言</td><td>专业评审会判低分</td><td>真人配音或情绪 TTS（另立项目）</td></tr>
+<tr><td>画面内的字是模型写的</td><td>个别不通顺；霓虹招牌汉字是乱码</td><td>发布级风险（观众当真线索）</td><td>提示词写"no readable writing"；关键道具后期贴真字</td></tr>
+<tr><td>否定约束失效</td><td>扩散模型不执行"没有人"这类约束（E03 s15 仍有远景人影）</td><td>单个镜头穿帮</td><td>改成纯正向描述后重渲该镜（210 s）</td></tr>
+<tr><td>竖屏关键帧仍是横图</td><td>关键帧阶段未按竖幅出图</td><td>不能当 i2v 首帧</td><td>关键帧生成按 aspect 分支</td></tr>
+<tr><td>逻辑体检依赖本地 LLM</td><td>LLM 未启动时只能人工过</td><td>漏检</td><td>LLM 与渲染互斥 → 排窗口</td></tr>
+</tbody>
+</table>
+
+<h3>9.2 路线</h3>
+<table>
+<thead><tr><th>项</th><th>内容</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>M8 Web 模式</td><td>任务看板 + 触发 + 心跳投影 + 放映 + 交付审批</td><td><span class="tag ok">已完成</span></td></tr>
+<tr><td>M9 批量与系列化</td><td><code>sd batch</code> 连续 5 集；跨集亮度/响度/定妆一致性自动核</td><td><span class="tag gray">未开始</span></td></tr>
+<tr><td>高质量档</td><td>真超分窗口化（停 LLM → ESRGAN），做成 <code>sd release --quality high</code></td><td><span class="tag mid">工具就绪，待决策</span></td></tr>
+<tr><td>声音升级</td><td>真人配音 / 情绪 TTS + 对轨</td><td><span class="tag gray">未开始</span></td></tr>
+<tr><td>品味层</td><td>爆款拆解表 + 真人盲测</td><td><span class="tag gray">未开始</span></td></tr>
+</tbody>
+</table>
+
+<h3>9.3 风险</h3>
+<table>
+<thead><tr><th>风险</th><th>触发信号</th><th>对策</th></tr></thead>
+<tbody>
+<tr><td>显存被 LLM 占住 → 渲染/超分起不来</td><td>nvidia-smi 里 19GB 的 llama 进程</td><td>阶段串行 + 显存门控（<code>wait_gpu</code>）</td></tr>
+<tr><td>成片比 clip 旧（只渲了没合）</td><td>clip mtime &gt; 成片 mtime</td><td>assemble 会自动重做；审批状态同时自动回落</td></tr>
+<tr><td>审片结论与片不同源</td><td>审片单时间早于成片</td><td>门禁比对时间戳；重渲后必须复核</td></tr>
+<tr><td>审片用了不可信证据</td><td>用关键帧判成片</td><td>纪律：只认成片抽帧（证据表量化 PSNR 差距）</td></tr>
+<tr><td>交付件齐全但不可发</td><td>空模板审片单 / 中途态报告</td><td>CHECKS.md + 审批门禁</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 10 ================= -->
+<section id="glossary">
+<h2>10 · 术语表</h2>
+<table>
+<thead><tr><th>词</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td>W4A8</td><td>权重 4bit / 激活 8bit 量化 —— sm_75 上唯一可用的视频推理形态</td></tr>
+<tr><td>Ref2VA</td><td>H3 的参考图路线，提示词里用 <code>&lt;Picture 1&gt;</code> 引用定妆图，人物一致性最强</td></tr>
+<tr><td>定妆图</td><td>角色的"锚点照"：主图 + 备图，供每镜 ref2va 引用</td></tr>
+<tr><td>物镜</td><td>画面里没有角色的镜（<code>ref=null</code>）→ 走纯 t2v 工作流，不带参考图</td></tr>
+<tr><td>关键帧</td><td>每镜一张的静态预览图（10 s/张），用于<b>出镜前</b>审构图；不能代表成片</td></tr>
+<tr><td>证据表</td><td>无图环境下的取证层：每镜客观事实 + 旗标 + 优先级</td></tr>
+<tr><td>门禁</td><td>客观检查集合（质检阻断/审片结论/证据表/交付件/字幕覆盖），批准时重跑</td></tr>
+<tr><td>上传包</td><td>发布交接物：成片 + 封面 + 元数据 + 字幕 + 文案 + CHECKS.md</td></tr>
+<tr><td>文件即状态</td><td>job 目录是唯一真相源，看板与审批只是投影</td></tr>
+<tr><td>C2</td><td>硬约束：单卡 22GB，LLM 与渲染不能共存</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ================= 11 ================= -->
+<section id="appendix">
+<h2>11 · 附录</h2>
+
+<h3>11.1 交付件清单（单集 11 件）</h3>
+<pre><code>episode.mp4            成片（竖屏 _P 为主交付，横屏备用）
+cover_&lt;job&gt;.jpg    封面
+release_meta.json      标题/简介/标签/时长/分辨率（从成片实测）
+qc/review.md           人工逐镜审片单（35 镜/集，横竖各一份）
+report.json            质检报告（阻断必须 0）
+subtitles.srt          字幕（平台字幕轨用）
+subtitles.ass          烧录用字幕（PlayRes=交付分辨率，竖屏 MarginV=300）
+clips/manifest.json    每镜 prompt/seed/时长/关键帧
+story.json shots.json 剧本与分镜（溯源）
+voice/track.wav        配音人声轨</code></pre>
+
+<h3>11.2 实测数据（3 集 · 105 镜）</h3>
+<table>
+<thead><tr><th>指标</th><th>E01</th><th>E02</th><th>E03</th></tr></thead>
+<tbody>
+<tr><td>集长 / 镜数</td><td>182.02 s / 35</td><td>182.02 s / 35</td><td>182.02 s / 35</td></tr>
+<tr><td>画幅</td><td>1920×1056 + 1080×1920</td><td>同左</td><td>同左</td></tr>
+<tr><td>有字幕的镜</td><td>30/35</td><td>31/35</td><td>32/35</td></tr>
+<tr><td>配音句数</td><td>11</td><td>12</td><td>12</td></tr>
+<tr><td>I / LRA</td><td>-16.0 / 7.4</td><td>-16.1 / 7.6</td><td>-16.1 / 8.0</td></tr>
+<tr><td>峰值 / 真峰</td><td>-1.6 / -1.8</td><td>-1.5 / -1.6</td><td>-1.6 / -1.5</td></tr>
+<tr><td>qc 阻断</td><td>0</td><td>0</td><td>0</td></tr>
+</tbody>
+</table>
+
+<h3>11.3 姊妹文档与仓库</h3>
+<table>
+<thead><tr><th>在哪</th><th>是什么</th></tr></thead>
+<tbody>
+<tr><td class="mono">workspace/shortdrama/docs/自动化短剧平台建设方案.html</td><td>建设方案：架构、决策、约束、里程碑、实测数据（工程视角）</td></tr>
+<tr><td class="mono">workspace/shortdrama/docs/SOP-短剧生产.md</td><td>SOP：每一步命令、纪律、踩坑、审片协议（执行视角）</td></tr>
+<tr><td class="mono">workspace/shortdrama/skills/shortdrama-production/SKILL.md</td><td>agent 用法：七阶段怎么跑、每步该干什么</td></tr>
+<tr><td class="mono">github.com/shark2202/ai-work-platform</td><td>平台总控：版本钉死 + 一键装配 + 健康检查</td></tr>
+<tr><td class="mono">github.com/shark2202/shortdrama</td><td>web 平台 + pi-agent skill 代码</td></tr>
+<tr><td class="mono">github.com/shark2202/duanju</td><td>剧集产物与结论</td></tr>
+</tbody>
+</table>
+</section>
+
+<footer>
+产品设计文档 v1 · 2026-11-08 · 依据 D202611_001 三集实跑写成 · 适用机器：X99 + RTX 2080Ti 22GB（sm_75）·
+底座：pi-agent + ComfyUI v0.33.1 + MiniMax-H3 W4A8 + Z-Image
+</footer>
+</main>
+</div>
+</body>
+</html>

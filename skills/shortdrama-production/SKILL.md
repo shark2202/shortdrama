@@ -7,6 +7,12 @@ description: 在本机（RTX 2080Ti 22G + ComfyUI :8188 + MiniMax-H3 W4A8 + Z-Im
 
 **一句话题材 → 本地出成片。** pi-agent 当编剧+调度+质检，ComfyUI 当画+拍。
 
+## 先读哪份文档
+
+- `workspace/shortdrama/docs/产品设计文档.html` —— 产品是什么、流程与界面规格（先读这份）
+- `workspace/shortdrama/docs/SOP-短剧生产.md` —— 每一步的命令与纪律
+- `workspace/shortdrama/docs/自动化短剧平台建设方案.html` —— 架构与决策
+
 ## 组件与路径
 
 | 用途 | 用什么 | 路径 |
