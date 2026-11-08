@@ -848,11 +848,13 @@ def stage_qc(job: Path) -> int:
         findings.append({"level": level, "where": where, "message": msg})
 
     clip_durations: list[float] = []          # 实际每镜时长（字幕可见性抽样要用，别用剧本时长）
+    t_cursor = 0.0                            # 当前镜在整片时间轴上的起点（黑场分级用）
     for shot in shots:
         clip = job / "clips" / f"{shot['idx']:02d}.mp4"
         if not clip.exists():
             add("block", clip.name, "缺镜头")
             clip_durations.append(0.0)
+            t_cursor += shot.get("duration_s") or 5.2
             continue
         info = probe(clip)
         clip_durations.append(info.get("duration", 0.0))
@@ -866,16 +868,26 @@ def stage_qc(job: Path) -> int:
             add("warn", clip.name, "无音轨")
         # 一次解码同时查黑帧/静音/削波（原来跑 3 次，慢 3 倍）
         err = run([ffmpeg(), "-hide_banner", "-i", str(clip),
-                   "-vf", "blackdetect=d=0.4:pix_th=0.10",
+                   "-vf", "blackdetect=d=0.1:pix_th=0.10",
                    "-af", "silencedetect=n=-50dB:d=1.0,volumedetect", "-f", "null", "-"])
-        if "black_start" in err:
-            add("block", clip.name, "检出黑帧")
+        # 阈值收紧到 0.1s（审计发现 d=0.4 漏掉 0.25s 黑场），并分级：
+        #   镜首/镜尾 0.6s 内 = 转场黑场（淡入淡出）→ 提示；镜中段 = 实质黑场 → 阻断
+        for bs, be in re.findall(r"black_start:([\d.]+)\s+black_end:([\d.]+)", err):
+            s_rel, e_rel = float(bs) - t_cursor, float(be) - t_cursor
+            dur = info["duration"]
+            if e_rel <= 0.6 or s_rel >= dur - 0.6:
+                add("warn", clip.name,
+                    f"转场黑场 {float(bs):.2f}-{float(be):.2f}s（镜首/镜尾，属淡入淡出）")
+            else:
+                add("block", clip.name,
+                    f"镜内黑场 {float(bs):.2f}-{float(be):.2f}s（镜长 {dur:.2f}s）")
         if "silence_start" in err:
             add("warn", clip.name, "检出静音段")
         m = re.search(r"max_volume:\s*(-?\d+(?:\.\d+)?) dB", err)
         if m and float(m.group(1)) > -0.3:
             # 源镜头的削波由后期 limiter 兜住，所以镜头级只提示，成片级才阻断
             add("warn", clip.name, f"削波 max_volume={m.group(1)} dB（后期限幅兜底）")
+        t_cursor += info["duration"]
 
     ep_path = job / "episode.mp4"
     ep = {"exists": ep_path.exists()}
@@ -891,10 +903,29 @@ def stage_qc(job: Path) -> int:
         if abs(info["duration"] - want) > 0.5:
             add("warn", ep_path.name, f"成片时长 {info['duration']:.2f}s 与剧本 {want}s 偏差 > 0.5s")
         err = run([ffmpeg(), "-hide_banner", "-i", str(ep_path),
-                   "-vf", "blackdetect=d=0.4:pix_th=0.10",
+                   "-vf", "blackdetect=d=0.1:pix_th=0.10",
                    "-af", "silencedetect=n=-50dB:d=1.0,volumedetect", "-f", "null", "-"])
-        if "black_start" in err:
-            add("block", ep_path.name, "成片检出黑帧")
+        ep_dur = info["duration"]
+
+        def _edge_of_shot(ts: float) -> bool:
+            """这个时间点是否落在某镜的首/尾 0.6s 内（= 淡入淡出转场，不是黑帧事故）。"""
+            acc = 0.0
+            for d in clip_durations:
+                if d <= 0:
+                    continue
+                if acc <= ts < acc + d:
+                    return (ts - acc) <= 0.6 or (acc + d) - ts <= 0.6
+                acc += d
+            return ts <= 0.6 or ts >= ep_dur - 0.6
+
+        for bs, be in re.findall(r"black_start:([\d.]+)\s+black_end:([\d.]+)", err):
+            s_rel, e_rel = float(bs), float(be)
+            if _edge_of_shot(s_rel) or _edge_of_shot(e_rel):
+                add("warn", ep_path.name,
+                    f"转场黑场 {s_rel:.2f}-{e_rel:.2f}s（某镜首尾的淡入淡出，非黑帧事故）")
+            else:
+                add("block", ep_path.name,
+                    f"成片镜内黑场 {s_rel:.2f}-{e_rel:.2f}s（片长 {ep_dur:.2f}s）")
         # 成片级静音/削波是交付物缺陷 → 阻断（镜头级只提示，因为后期还能兜底）
         if "silence_start" in err:
             add("block", ep_path.name, "成片检出静音段")
