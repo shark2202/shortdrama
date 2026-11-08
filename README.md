@@ -94,6 +94,23 @@ $EPY $SCRIPT $EP qc        # 黑帧/静音/削波/时长/分辨率/字幕覆盖�
 - 实操流程：`docs/SOP-短剧生产.md`（七阶段 T0–T7 + 任务看板 + 交付审批）。
 - 交付审批：`sd approval <job>`（提交/批准/驳回；批准时客观门禁重跑，成片改动后批准自动失效）。
 
+## 审片服务（独立常驻 · systemd）
+
+审片台（审片 + 任务看板 + 放映 + 交付审批）做成 **systemd user service**：
+独立于任何会话、重启自动拉起、崩溃自动重拉，开机自启（Linger=yes）。
+
+```bash
+bash tools/serve_review.sh install    # 安装 + 启动（首次生成固定令牌）
+bash tools/serve_review.sh url       # 打印访问 URL
+bash tools/serve_review.sh status    # 看状态
+bash tools/serve_review.sh logs      # 看日志
+bash tools/serve_review.sh stop      # 停
+```
+
+- 令牌固定存 `~/.config/shortdrama/studio.token`（600），重启后 URL 不变。
+- 写操作（挑图 / 逐镜判定 / 审批）必须带令牌；读操作（看片）局域网开放。
+- 想只给外部人看片：用静态资产页 `./sd assets serve <job> --port 8092`（纯只读、无令牌）。
+
 ## 静态服务（方案文档）
 
 ```bash

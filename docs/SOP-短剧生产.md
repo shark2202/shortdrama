@@ -554,6 +554,9 @@ cd workspace/shortdrama
 ./sd studio                      # 本机 → http://127.0.0.1:8095/
 ./sd studio --host 0.0.0.0       # 局域网审片（手机上看）→ 打印带令牌的 URL
 ./sd studio --status             # agent 在 TUI 里问"人审完了吗"
+
+# 长期运行用 systemd user service（独立于会话，崩溃自愈，开机自启）
+bash tools/serve_review.sh install && bash tools/serve_review.sh url
 ```
 
 局域网审片的三条纪律：
