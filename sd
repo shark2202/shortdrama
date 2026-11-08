@@ -110,13 +110,16 @@ def cmd_approval(args) -> int:
 def cmd_board(args) -> int:
     """终端版任务看板：看阶段状态 / 触发阶段（网页看板的等价物，agent 在 TUI 里用）。"""
     root = Path(args.dir or "/home/a/ai-work/workspace/duanju").expanduser().resolve()
-    eps = sorted(p for p in root.glob(f"{args.series}_E*") if p.is_dir())
+    if args.series == "auto":
+        eps = sorted(p for p in root.glob("D*_E*") if p.is_dir())
+    else:
+        eps = sorted(p for p in root.glob(f"{args.series}_E*") if p.is_dir())
     if args.episode:
         # E01 同时对上横屏 D202611_001_E01 和竖屏 D202611_001_E01_P
         eps = [p for p in eps
                if p.name.split("_", 2)[-1] in (args.episode, args.episode + "_P")]
     if not eps:
-        print(f"（{root} 下没有 {args.series}_E* 目录）")
+        print(f"（{root} 下没有匹配 {args.series} 的集目录）")
         return 1
     for job in eps:
         if args.run:
@@ -164,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     # 审片 Web 界面（TUI 看不了图/视频，人在这里审，agent 在 TUI 里读决定）
     p = sub.add_parser("studio", help="审片 Web 界面（选图 / 逐镜审片 / 成片）")
     p.add_argument("dir", nargs="?", help="剧集根目录（默认 workspace/duanju）")
-    p.add_argument("--series", default="D202611_001")
+    p.add_argument("--series", default="auto", help="系列前缀；auto = 自动发现 root 下所有系列")
     p.add_argument("--host", default="127.0.0.1", help="局域网审片用 0.0.0.0")
     p.add_argument("--token", default="", help="写操作令牌（局域网开放时自动生成）")
     p.add_argument("--port", type=int, default=8095)
@@ -184,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     # 任务看板：阶段状态 + 触发（网页看板的终端等价物）
     p = sub.add_parser("board", help="任务看板：看阶段状态 / 触发阶段")
     p.add_argument("dir", nargs="?", help="剧集根目录（默认 workspace/duanju）")
-    p.add_argument("--series", default="D202611_001")
+    p.add_argument("--series", default="auto", help="系列前缀；auto = 自动发现 root 下所有系列")
     p.add_argument("--episode", help="只看板某一集（如 E01）")
     p.add_argument("--run", help="触发某个阶段（lint/cast/pick/shots/frames/render/assemble/qc/dialogue）")
     p.add_argument("--mode", default="cli", choices=["cli", "agent"], help="执行者：本地命令 / pi-agent 内核")

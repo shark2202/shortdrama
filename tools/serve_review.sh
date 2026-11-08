@@ -25,6 +25,7 @@ TOKEN_FILE="$CONF_DIR/studio.token"
 PY=/home/a/ai-work/.venv/bin/python
 ROOT=${SHORTDRAMA_ROOT:-/home/a/ai-work/duanju}
 PORT=${SHORTDRAMA_PORT:-8095}
+SERIES=${SHORTDRAMA_SERIES:-auto}
 HOST=${SHORTDRAMA_HOST:-0.0.0.0}
 
 ensure_token() {
@@ -47,7 +48,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$HERE
-ExecStart=$PY $HERE/sd studio $ROOT --host $HOST --port $PORT --token $TOKEN
+ExecStart=$PY $HERE/sd studio $ROOT --series $SERIES --host $HOST --port $PORT --token $TOKEN
 Restart=always
 RestartSec=5
 # 审片台只读文件 + 写决定文件，不需要 GPU

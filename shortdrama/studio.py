@@ -199,20 +199,41 @@ def episode_state(job: Path) -> dict:
     return st
 
 
+def _series_prefixes(root: Path) -> list[str]:
+    """root 下所有系列前缀（D202611_001 这种），按目录名去重。"""
+    out = []
+    for d in sorted(root.glob("D*_E*")):
+        if not d.is_dir():
+            continue
+        name = d.name
+        # D202611_001_E01 / D202611_001_E01_P → 前缀 D202611_001
+        parts = name.split("_")
+        if len(parts) >= 3:
+            prefix = "_".join(parts[:2])
+            if prefix not in out:
+                out.append(prefix)
+    return out
+
+
 def series_state(root: Path, series: str = "D202611_001") -> dict:
-    """剧集级：把各集列出来 + 共用的定妆图。"""
+    """剧集级：把各集列出来 + 共用的定妆图。
+
+    `series="auto"` → 自动发现 root 下的**所有**系列（一个审片台看多个剧集项目）。
+    """
     root = Path(root)
+    prefixes = _series_prefixes(root) if series == "auto" else [series]
     eps = []
-    for d in sorted(root.glob(f"{series}_E*")):
-        if d.is_dir():
-            eps.append(episode_state(d))
+    for pre in prefixes:
+        for d in sorted(root.glob(f"{pre}_E*")):
+            if d.is_dir():
+                eps.append(episode_state(d))
     shared = []
     cast_dir = root / "cast"
     if cast_dir.is_dir():
         for p in sorted(cast_dir.glob("*.png")):
             if "_cand" not in p.name:
                 shared.append(p.name)
-    return {"series": series, "root": str(root), "episodes": eps,
+    return {"series": series, "series_list": prefixes, "root": str(root), "episodes": eps,
             "shared_cast": shared,
             "outline": str(root / "series_outline.json")}
 

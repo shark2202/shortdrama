@@ -108,6 +108,13 @@ bash tools/serve_review.sh stop      # 停
 ```
 
 - 令牌固定存 `~/.config/shortdrama/studio.token`（600），重启后 URL 不变。
+- **服务范围**：一个实例 = 一个剧集根目录（`SHORTDRAMA_ROOT`）+ 该目录下**所有系列**
+  （`--series auto`，自动发现 `D202611_001` 这类前缀）→ 换项目只改环境变量，不用改代码：
+  ```bash
+  SHORTDRAMA_ROOT=/home/a/ai-work/duanju SHORTDRAMA_PORT=8095 bash tools/serve_review.sh install
+  ```
+  要同时看**不同项目**（比如别的剧集仓库），就再装一个实例、换端口（单元名加后缀）。
+- 纯看文件（不限短剧）：`./sd assets serve <任意目录> --port 8092`（只读、无令牌）。
 - 写操作（挑图 / 逐镜判定 / 审批）必须带令牌；读操作（看片）局域网开放。
 - 想只给外部人看片：用静态资产页 `./sd assets serve <job> --port 8092`（纯只读、无令牌）。
 
